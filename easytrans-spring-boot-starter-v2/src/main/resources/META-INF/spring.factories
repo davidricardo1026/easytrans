@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+  io.github.easytrans.starter.v2.autoconfigure.EasyTransV2AutoConfiguration

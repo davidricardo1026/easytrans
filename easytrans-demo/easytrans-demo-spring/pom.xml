@@ -17,7 +17,7 @@
     <dependencies>
         <dependency>
             <groupId>io.github.easytrans</groupId>
-            <artifactId>easytrans-core</artifactId>
+            <artifactId>easytrans-spring-boot-starter</artifactId>
             <version>${project.version}</version>
         </dependency>
 

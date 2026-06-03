@@ -285,7 +285,9 @@ public class EasyTransProcessor extends AbstractProcessor {
             body.append("import java.util.ArrayList;\n");
             body.append("import java.util.List;\n\n");
             if (enableSpring) {
-                body.append("@Component\n");
+                String beanName = "easytransBridge_" + model.mapperPackageName.replace('.',
+                                                                                       '_') + "_" + model.bridgeSimpleName;
+                body.append("@Component(\"").append(beanName).append("\")\n");
             }
             body.append("public class ").append(model.bridgeSimpleName)
                     .append(" implements BaseTranslationMapper<")
@@ -401,7 +403,8 @@ public class EasyTransProcessor extends AbstractProcessor {
             body.append("import java.util.HashMap;\n");
             body.append("import java.util.Map;\n\n");
             if (enableSpring) {
-                body.append("@Component\n");
+                String beanName = "easytransRegistry_" + registryPkg.replace('.', '_');
+                body.append("@Component(\"").append(beanName).append("\")\n");
             }
             body.append("public class GeneratedTranslationRegistry implements TranslationRegistry {\n\n");
             body.append("    private final Map<Class<?>, BaseTranslationMapper<?, ?>> bySourceClass;\n\n");

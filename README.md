@@ -102,6 +102,33 @@ EasyTrans 默认会往生成的 Mapper、Bridge 和 Registry 类上加上 `@Comp
 
 ### Maven 配置示例：
 
+#### A. Spring Boot 3 & 4 (JDK 17+)
+
+直接在你的主应用中引入 `easytrans-spring-boot-starter`：
+
+```xml
+<dependency>
+    <groupId>io.github.easytrans</groupId>
+    <artifactId>easytrans-spring-boot-starter</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+</dependency>
+```
+
+#### B. Spring Boot 2 (JDK 8 / 11 / 17)
+
+直接在你的主应用中引入 `easytrans-spring-boot-starter-v2`：
+
+```xml
+<dependency>
+    <groupId>io.github.easytrans</groupId>
+    <artifactId>easytrans-spring-boot-starter-v2</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+</dependency>
+```
+
+#### APT 编译器配置：
+
+在编译插件中配置 `easytrans-processor` 注解处理器（它会在编译期为你疯狂输出极速原生桥接代码）：
 ```xml
 <plugin>
     <groupId>org.apache.maven.plugins</groupId>
@@ -143,6 +170,46 @@ EasyTrans 默认会往生成的 Mapper、Bridge 和 Registry 类上加上 `@Comp
         </annotationProcessorPaths>
     </configuration>
 </plugin>
+```
+
+### Gradle 配置示例 (Groovy DSL)：
+
+对于 Gradle 构建的项目，可以在 `build.gradle` 中非常简便地声明依赖与编译器参数。**注意：注解处理器的声明顺序最好与 Maven
+中一致，以保证 Lombok 与 MapStruct 协同正常。**
+
+```groovy
+dependencies {
+  // 1. 引入 EasyTrans Starter (根据你的 Spring Boot 版本选择)
+  // Spring Boot 3/4 选择:
+  implementation 'io.github.easytrans:easytrans-spring-boot-starter:1.0.0-SNAPSHOT'
+  // Spring Boot 2 选择:
+  // implementation 'io.github.easytrans:easytrans-spring-boot-starter-v2:1.0.0-SNAPSHOT'
+
+  implementation 'org.mapstruct:mapstruct:1.5.5.Final'
+  compileOnly 'org.projectlombok:lombok:1.18.30'
+
+  // 2. 声明注解处理器 (APT)
+  annotationProcessor 'org.projectlombok:lombok:1.18.30'
+  annotationProcessor 'io.github.easytrans:easytrans-processor:1.0.0-SNAPSHOT'
+  annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
+  annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0' // 保证 Lombok 与 MapStruct 绑定正常
+}
+
+// 3. 传入配置参数（按需传入后缀配置、非 Spring 模式或全包名限定）
+compileJava {
+  options.compilerArgs += [
+          // 场景 A：我想使用后缀配置来自定义，比如改为 .gen 和 .gen.map
+          '-Aeasytrans.generated.package.suffix=gen',
+          '-Aeasytrans.generated.mapper.package.suffix=gen.map',
+
+          // 场景 B：支持非 Spring 环境（关闭 Spring 组件注解，不加则默认为 true）
+          '-Aeasytrans.enable.spring=false'
+
+          // 场景 C：我想限制成全局唯一的全包名（这会覆盖上面的后缀配置）
+          // '-Aeasytrans.generated.package=com.yourcompany.project.easytrans.generated',
+          // '-Aeasytrans.generated.mapper.package=com.yourcompany.project.easytrans.generated.mapper'
+  ]
+}
 ```
 
 ---
