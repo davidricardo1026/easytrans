@@ -239,6 +239,51 @@ public class OrderController {
 
 ---
 
+---
+
+## 📂 多模块 Demo 项目结构说明
+
+为了全方位、多维度地向您展现 EasyTrans 在真实生产、以及不同底层架构环境下的适用性，我们在 `easytrans-demo` 目录下精心构建了一个
+**多模块项目**。它分为：
+
+```text
+easytrans-demo
+├── easytrans-demo-common   # 公共实体层：包含通用的 PO、VO 声明。编译期采用非 Spring 模式生成代码。
+├── easytrans-demo-spring   # Spring Web MVC 环境：支持 MyBatis-Plus 本地数据库查询与 BodyAdvice 零侵入转义。
+└── easytrans-demo-main     # 纯 Java Main 环境：演示在没有任何 Spring 容器的情况下，手动驱动转义的极简流程。
+```
+
+### 1. `easytrans-demo-common` (公共实体与自动生成层)
+
+* **职能**：定义了订单等通用 `PO` 与转义 `VO` 模型。
+* **特点**：在 `pom.xml` 中配置了 `-Aeasytrans.enable.spring=false`，因此编译该模块时，生成的 Mapper、Bridge 转换器、Registry
+  注册表**完全没有 Spring 依赖**。
+* **生成位置**：自动生成在 VO 所在的同级子包下，如 `GeneratedTranslationRegistry` 位于
+  `io.github.easytrans.demo.entity.vo.generated`。
+
+### 2. `easytrans-demo-spring` (Spring Boot 3 + MyBatis-Plus 示例)
+
+* **职能**：典型企业级 Spring 整合。
+* **如何驱动非 Spring 生成的注册表**：在 `TranslationConfig.java` 中将其手动声明为一个常规 Spring Bean 即可：
+  ```java
+  @Bean
+  public TranslationRegistry translationRegistry() {
+      return new GeneratedTranslationRegistry(); // 直接手动实例化，由 Spring 容器管理
+  }
+  ```
+* **拦截器配置**：配置了 `AutoTranslationAdvice` (继承 `ResponseBodyAdvice`)，在 API 响应的第一时间自动拦截 `PO`（或
+  `Result<PO>`）并原地升级为 `VO`。Controller 业务层 100% 干净，只跟数据库实体打交道。
+
+### 3. `easytrans-demo-main` (纯 Java 原生环境示例)
+
+* **职能**：微服务、轻量级 RPC 客户端、或者非 Spring Web 框架下的使用。
+* **运行机制**：完全在 `main` 方法中自闭环运行。由于代码不依赖 Spring 容器，你只需：
+  1. 通过 `new GeneratedTranslationRegistry()` 瞬时建立注册映射。
+  2. 手动创建 `TranslationFeeder` 的 mock/常规实现实例。
+  3. 执行 `translationExecutor.translate(pos, mapper)` 即可完美享受两阶段批量高性能 ID 转义。
+
+---
+
 ## 📄 开源许可证 (License)
 
 EasyTrans 采用 [Apache License 2.0](LICENSE) 许可协议，欢迎贡献代码与提报 Issue！

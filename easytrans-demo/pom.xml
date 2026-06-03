@@ -11,104 +11,13 @@
     </parent>
 
     <artifactId>easytrans-demo</artifactId>
+    <packaging>pom</packaging>
     <name>easytrans-demo</name>
-    <description>Enterprise-level integration and usage demo for EasyTrans</description>
+    <description>Enterprise-level integration and usage demo for EasyTrans (Multi-Module)</description>
 
-    <dependencies>
-        <dependency>
-            <groupId>io.github.easytrans</groupId>
-            <artifactId>easytrans-core</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
-            <version>${mybatis-plus.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <version>${lombok.version}</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.mapstruct</groupId>
-            <artifactId>mapstruct</artifactId>
-            <version>${mapstruct.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
-                <configuration>
-                    <source>17</source>
-                    <target>17</target>
-                    <!--
-                    <compilerArgs>
-                        场景 A：自定义包后缀配置（在原 VO 所在包名下追加后缀，默认是 generated 和 generated.mapper）
-                        <arg>-Aeasytrans.generated.package.suffix=generated</arg>
-                        <arg>-Aeasytrans.generated.mapper.package.suffix=generated.mapper</arg>
-
-                        场景 B：支持非 Spring 环境下极速运行（不配置该参数时默认是 true，会自动带上 @Component）
-                        <arg>-Aeasytrans.enable.spring=false</arg>
-
-                        场景 C：自定义固定全包名配置（高级模式，配置后会覆盖后缀配置，强制全生成的类在固定全包名下）
-                        <arg>-Aeasytrans.generated.package=io.github.easytrans.generated</arg>
-                        <arg>-Aeasytrans.generated.mapper.package=io.github.easytrans.generated.mapper</arg>
-                    </compilerArgs>
-                    -->
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                            <version>${lombok.version}</version>
-                        </path>
-                        <path>
-                            <groupId>io.github.easytrans</groupId>
-                            <artifactId>easytrans-processor</artifactId>
-                            <version>${project.version}</version>
-                        </path>
-                        <path>
-                            <groupId>org.mapstruct</groupId>
-                            <artifactId>mapstruct-processor</artifactId>
-                            <version>${mapstruct.version}</version>
-                        </path>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok-mapstruct-binding</artifactId>
-                            <version>0.2.0</version>
-                        </path>
-                    </annotationProcessorPaths>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
+    <modules>
+        <module>easytrans-demo-common</module>
+        <module>easytrans-demo-spring</module>
+        <module>easytrans-demo-main</module>
+    </modules>
 </project>
