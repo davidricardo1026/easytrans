@@ -1,0 +1,128 @@
+package io.github.easytrans.demo;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@AutoConfigureMockMvc
+public class EasyTransDemoApplicationTests {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    /**
+     * 测试 1：裸 List<OrderPO> 形式，自动转义为 List<OrderVO>
+     * - 校验订单列表大小、订单主体信息翻译（userId -> userName）
+     * - 校验订单项嵌套列表的翻译（goodsId -> goodsName）
+     */
+    @Test
+    public void testListOrders() throws Exception {
+        mockMvc.perform(get("/orders")
+                                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                // 校验列表长度
+                .andExpect(jsonPath("$", hasSize(3)))
+                // 订单 1 校验：用户 1 -> 张三
+                .andExpect(jsonPath("$[0].id", is(1)))
+                .andExpect(jsonPath("$[0].userId", is(1)))
+                .andExpect(jsonPath("$[0].userName", is("张三")))
+                .andExpect(jsonPath("$[0].items", hasSize(2)))
+                .andExpect(jsonPath("$[0].items[0].id", is(1)))
+                .andExpect(jsonPath("$[0].items[0].goodsId", is(101)))
+                .andExpect(jsonPath("$[0].items[0].goodsName", is("MacBook Pro")))
+                .andExpect(jsonPath("$[0].items[1].id", is(2)))
+                .andExpect(jsonPath("$[0].items[1].goodsId", is(102)))
+                .andExpect(jsonPath("$[0].items[1].goodsName", is("iPhone 15")))
+                // 订单 2 校验：用户 2 -> 李四
+                .andExpect(jsonPath("$[1].id", is(2)))
+                .andExpect(jsonPath("$[1].userId", is(2)))
+                .andExpect(jsonPath("$[1].userName", is("李四")))
+                .andExpect(jsonPath("$[1].items", hasSize(1)))
+                .andExpect(jsonPath("$[1].items[0].id", is(3)))
+                .andExpect(jsonPath("$[1].items[0].goodsId", is(103)))
+                .andExpect(jsonPath("$[1].items[0].goodsName", is("AirPods Pro")))
+                // 订单 3 校验：用户 1 -> 张三
+                .andExpect(jsonPath("$[2].id", is(3)))
+                .andExpect(jsonPath("$[2].userId", is(1)))
+                .andExpect(jsonPath("$[2].userName", is("张三")))
+                .andExpect(jsonPath("$[2].items", hasSize(2)))
+                .andExpect(jsonPath("$[2].items[0].goodsId", is(101)))
+                .andExpect(jsonPath("$[2].items[0].goodsName", is("MacBook Pro")))
+                .andExpect(jsonPath("$[2].items[1].goodsId", is(103)))
+                .andExpect(jsonPath("$[2].items[1].goodsName", is("AirPods Pro")));
+    }
+
+    /**
+     * 测试 2：裸单 OrderPO 形式，自动转义为 OrderVO
+     * - 校验单个对象的翻译（userId -> userName）以及子项的翻译
+     */
+    @Test
+    public void testGetOrderSingle() throws Exception {
+        mockMvc.perform(get("/orders/1")
+                                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(1)))
+                .andExpect(jsonPath("$.userId", is(1)))
+                .andExpect(jsonPath("$.userName", is("张三")))
+                .andExpect(jsonPath("$.items", hasSize(2)))
+                .andExpect(jsonPath("$.items[0].goodsId", is(101)))
+                .andExpect(jsonPath("$.items[0].goodsName", is("MacBook Pro")))
+                .andExpect(jsonPath("$.items[1].goodsId", is(102)))
+                .andExpect(jsonPath("$.items[1].goodsName", is("iPhone 15")));
+    }
+
+    /**
+     * 测试 3：包装格式 Result<List<OrderPO>> 形式，自动转义为 Result<List<OrderVO>>
+     * - 验证切面对包装类的支持，不仅要解包翻译，还要装包还原
+     */
+    @Test
+    public void testWrappedOrders() throws Exception {
+        mockMvc.perform(get("/orders/wrapped")
+                                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code", is(200)))
+                .andExpect(jsonPath("$.msg", is("success")))
+                .andExpect(jsonPath("$.data", hasSize(3)))
+                .andExpect(jsonPath("$.data[0].id", is(1)))
+                .andExpect(jsonPath("$.data[0].userName", is("张三")))
+                .andExpect(jsonPath("$.data[0].items[0].goodsName", is("MacBook Pro")));
+    }
+
+    /**
+     * 测试 4：归档订单 List<ArchiveOrderPO> 形式，【同样且完全自动地】转义映射为 List<OrderVO>
+     * - 验证多数据源、多 PO 支持：同一视图类 (OrderVO) 在不同数据源下（归档 PO）依然能够完美映射与翻译
+     */
+    @Test
+    public void testArchiveOrders() throws Exception {
+        mockMvc.perform(get("/orders/archive")
+                                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                // 归档订单 10 校验：用户 3 -> 王五
+                .andExpect(jsonPath("$[0].id", is(10)))
+                .andExpect(jsonPath("$[0].userId", is(3)))
+                .andExpect(jsonPath("$[0].userName", is("王五")))
+                .andExpect(jsonPath("$[0].items", hasSize(1)))
+                .andExpect(jsonPath("$[0].items[0].id", is(10)))
+                .andExpect(jsonPath("$[0].items[0].goodsId", is(102)))
+                .andExpect(jsonPath("$[0].items[0].goodsName", is("iPhone 15")))
+                // 归档订单 11 校验：用户 2 -> 李四
+                .andExpect(jsonPath("$[1].id", is(11)))
+                .andExpect(jsonPath("$[1].userId", is(2)))
+                .andExpect(jsonPath("$[1].userName", is("李四")))
+                .andExpect(jsonPath("$[1].items", hasSize(1)))
+                .andExpect(jsonPath("$[1].items[0].id", is(11)))
+                .andExpect(jsonPath("$[1].items[0].goodsId", is(101)))
+                .andExpect(jsonPath("$[1].items[0].goodsName", is("MacBook Pro")));
+    }
+}
