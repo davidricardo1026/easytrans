@@ -249,7 +249,10 @@ public class OrderController {
 ```text
 easytrans-demo
 ├── easytrans-demo-spring   # Spring Web MVC 环境：全自动 Spring 模式。支持 MyBatis-Plus 数据库查询与 BodyAdvice 零侵入转义。
-└── easytrans-demo-main     # 纯 Java Main 环境：全自动非 Spring 模式。演示在没有任何 Spring 容器的情况下，手动驱动转义的极简流程。
+├── easytrans-demo-main     # 纯 Java Main 环境：全自动非 Spring 模式。演示在没有任何 Spring 容器的情况下，手动驱动转义的极简流程。
+├── easytrans-demo-suffix   # 测试模块：配置包后缀 (-Aeasytrans.generated.package.suffix, -Aeasytrans.generated.mapper.package.suffix)。
+├── easytrans-demo-full     # 测试模块：配置全局唯一的固定全包名 (-Aeasytrans.generated.package, -Aeasytrans.generated.mapper.package)。
+└── easytrans-demo-both     # 测试模块：同时配置后缀与全包名，测试全包名限定的高优先级覆盖规则。
 ```
 
 ### 1. `easytrans-demo-spring` (Spring Boot 3 + MyBatis-Plus 示例)
@@ -269,6 +272,12 @@ easytrans-demo
   1. 通过 `new GeneratedTranslationRegistry()` 瞬时建立注册映射。
   2. 手动创建 `TranslationFeeder` 的 mock/常规实现实例。
   3. 执行 `translationExecutor.translate(pos, mapper)` 即可完美享受两阶段批量高性能 ID 转义。
+
+### 3. 配置测试模块
+
+* **`easytrans-demo-suffix`**: 测试在 VO 所在的包追加自定义后缀，编译后生成物自动存放于 VO 包下的子包中，彻底隔离并分类。
+* **`easytrans-demo-full`**: 测试强制全局全包名配置模式，不采用包后缀邻近生成，直接由用户掌控目标生成包。
+* **`easytrans-demo-both`**: 测试全包名配置与后缀配置混合传入，验证全包名配置拥有更高优先级的完全覆盖机制。
 
 ---
 

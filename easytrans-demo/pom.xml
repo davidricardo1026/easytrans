@@ -18,5 +18,8 @@
     <modules>
         <module>easytrans-demo-spring</module>
         <module>easytrans-demo-main</module>
+        <module>easytrans-demo-suffix</module>
+        <module>easytrans-demo-full</module>
+        <module>easytrans-demo-both</module>
     </modules>
 </project>
