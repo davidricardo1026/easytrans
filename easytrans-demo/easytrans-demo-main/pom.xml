@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.easytrans</groupId>
+        <artifactId>easytrans-demo</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>easytrans-demo-main</artifactId>
+    <name>easytrans-demo-main</name>
+    <description>Demo of EasyTrans in a plain Java main method environment (Non-Spring)</description>
+
+    <dependencies>
+        <!-- 依赖公共实体与自动生成的翻译器模块 -->
+        <dependency>
+            <groupId>io.github.easytrans</groupId>
+            <artifactId>easytrans-demo-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+</project>
