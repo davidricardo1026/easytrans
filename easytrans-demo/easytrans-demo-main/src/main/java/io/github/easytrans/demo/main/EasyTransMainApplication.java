@@ -4,10 +4,10 @@ import io.github.easytrans.core.mapstruct.BaseTranslationMapper;
 import io.github.easytrans.core.registry.TranslationRegistry;
 import io.github.easytrans.core.spi.TranslationExecutor;
 import io.github.easytrans.core.spi.TranslationFeeder;
-import io.github.easytrans.demo.entity.po.OrderItemPO;
-import io.github.easytrans.demo.entity.po.OrderPO;
-import io.github.easytrans.demo.entity.vo.OrderVO;
-import io.github.easytrans.demo.entity.vo.generated.GeneratedTranslationRegistry;
+import io.github.easytrans.demo.main.entity.po.OrderItemPO;
+import io.github.easytrans.demo.main.entity.po.OrderPO;
+import io.github.easytrans.demo.main.entity.vo.OrderVO;
+import io.github.easytrans.demo.main.entity.vo.generated.GeneratedTranslationRegistry;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,11 +28,11 @@ public class EasyTransMainApplication {
         System.out.println("【原始 PO 数据】: " + orderPOList);
 
         // 2. 手动创建非 Spring 模式下的 TranslationRegistry
-        // 由于 easytrans-common 编译期指定了 easytrans.enable.spring=false，
+        // 由于 easytrans-main 编译期指定了 easytrans.enable.spring=false，
         // GeneratedTranslationRegistry 内部在实例化时会直接 new 其所需的所有 bridge 转换器，无需任何依赖注入！
         TranslationRegistry translationRegistry = new GeneratedTranslationRegistry();
 
-        // 3. 手动注册所需业务的 TranslationFeeder (非 Spring 注册)
+        // 3. 手动注册所需业务 of TranslationFeeder (非 Spring 注册)
         List<TranslationFeeder> feeders = new ArrayList<>();
         feeders.add(new SimpleUserFeeder());
         feeders.add(new SimpleGoodsFeeder());

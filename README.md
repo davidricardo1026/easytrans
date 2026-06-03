@@ -248,36 +248,24 @@ public class OrderController {
 
 ```text
 easytrans-demo
-├── easytrans-demo-common   # 公共实体层：包含通用的 PO、VO 声明。编译期采用非 Spring 模式生成代码。
-├── easytrans-demo-spring   # Spring Web MVC 环境：支持 MyBatis-Plus 本地数据库查询与 BodyAdvice 零侵入转义。
-└── easytrans-demo-main     # 纯 Java Main 环境：演示在没有任何 Spring 容器的情况下，手动驱动转义的极简流程。
+├── easytrans-demo-spring   # Spring Web MVC 环境：全自动 Spring 模式。支持 MyBatis-Plus 数据库查询与 BodyAdvice 零侵入转义。
+└── easytrans-demo-main     # 纯 Java Main 环境：全自动非 Spring 模式。演示在没有任何 Spring 容器的情况下，手动驱动转义的极简流程。
 ```
 
-### 1. `easytrans-demo-common` (公共实体与自动生成层)
+### 1. `easytrans-demo-spring` (Spring Boot 3 + MyBatis-Plus 示例)
 
-* **职能**：定义了订单等通用 `PO` 与转义 `VO` 模型。
-* **特点**：在 `pom.xml` 中配置了 `-Aeasytrans.enable.spring=false`，因此编译该模块时，生成的 Mapper、Bridge 转换器、Registry
-  注册表**完全没有 Spring 依赖**。
-* **生成位置**：自动生成在 VO 所在的同级子包下，如 `GeneratedTranslationRegistry` 位于
-  `io.github.easytrans.demo.entity.vo.generated`。
-
-### 2. `easytrans-demo-spring` (Spring Boot 3 + MyBatis-Plus 示例)
-
-* **职能**：典型企业级 Spring 整合。
-* **如何驱动非 Spring 生成的注册表**：在 `TranslationConfig.java` 中将其手动声明为一个常规 Spring Bean 即可：
-  ```java
-  @Bean
-  public TranslationRegistry translationRegistry() {
-      return new GeneratedTranslationRegistry(); // 直接手动实例化，由 Spring 容器管理
-  }
-  ```
+* **职能**：典型企业级 Spring 整合，采用常规 Spring 模式进行转义。
+* **开发与配置**：它的 VO 声明在 `io.github.easytrans.demo.entity` 包中。它的 `pom.xml` 中使用了默认的编译配置（未配置
+  `easytrans.enable.spring`，默认为 `true`），生成的 Mapper、Bridge 转换器、Registry 注册表自动带有 Spring `@Component`
+  注解，完全由 Spring IoC 自动组装。
 * **拦截器配置**：配置了 `AutoTranslationAdvice` (继承 `ResponseBodyAdvice`)，在 API 响应的第一时间自动拦截 `PO`（或
   `Result<PO>`）并原地升级为 `VO`。Controller 业务层 100% 干净，只跟数据库实体打交道。
 
-### 3. `easytrans-demo-main` (纯 Java 原生环境示例)
-
+### 2. `easytrans-demo-main` (纯 Java 原生环境示例)
 * **职能**：微服务、轻量级 RPC 客户端、或者非 Spring Web 框架下的使用。
-* **运行机制**：完全在 `main` 方法中自闭环运行。由于代码不依赖 Spring 容器，你只需：
+* **开发与配置**：它的 VO 声明在 `io.github.easytrans.demo.main.entity` 包中。它的 `pom.xml` 中配置了
+  `-Aeasytrans.enable.spring=false`，因此编译该模块时，生成的类**完全没有 Spring 依赖**。
+* **运行机制**：完全在 `main` 方法中自闭环运行。你只需：
   1. 通过 `new GeneratedTranslationRegistry()` 瞬时建立注册映射。
   2. 手动创建 `TranslationFeeder` 的 mock/常规实现实例。
   3. 执行 `translationExecutor.translate(pos, mapper)` 即可完美享受两阶段批量高性能 ID 转义。
