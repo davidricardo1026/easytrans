@@ -1,0 +1,60 @@
+# Target
+target/
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Log
+*.log
+logs/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Eclipse
+.settings/
+.classpath
+.project
+.metadata/
+bin/
+tmp/
+
+# NetBeans
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# Visual Studio Code
+.vscode/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Maven
+release.properties
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.next
+pom.xml.backup
+cobertura.ser
+.netbeans/
+.maven/
+
+# Crash logs
+hs_err_pid*
+replay_pid*
+
+# Package Lock files
+mvnw
+mvnw.cmd
+.mvn/
