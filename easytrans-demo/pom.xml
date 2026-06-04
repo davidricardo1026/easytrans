@@ -15,6 +15,10 @@
     <name>easytrans-demo</name>
     <description>Enterprise-level integration and usage demo for EasyTrans (Multi-Module)</description>
 
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
     <modules>
         <module>easytrans-demo-spring</module>
         <module>easytrans-demo-main</module>
