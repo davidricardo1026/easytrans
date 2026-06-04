@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>io.github.easytrans</groupId>
+    <groupId>io.github.davidricardo1026</groupId>
     <artifactId>easytrans-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>

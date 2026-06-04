@@ -110,7 +110,7 @@ EasyTrans 默认会往生成的 Mapper、Bridge 和 Registry 类上加上 `@Comp
 
 ```xml
 <dependency>
-    <groupId>io.github.easytrans</groupId>
+  <groupId>io.github.davidricardo1026</groupId>
     <artifactId>easytrans-spring-boot-starter</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 </dependency>
@@ -122,7 +122,7 @@ EasyTrans 默认会往生成的 Mapper、Bridge 和 Registry 类上加上 `@Comp
 
 ```xml
 <dependency>
-    <groupId>io.github.easytrans</groupId>
+    <groupId>io.github.davidricardo1026</groupId>
     <artifactId>easytrans-spring-boot2-starter</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 </dependency>
@@ -176,7 +176,7 @@ EasyTrans 默认会往生成的 Mapper、Bridge 和 Registry 类上加上 `@Comp
                 <version>${lombok.version}</version>
             </path>
             <path>
-                <groupId>io.github.easytrans</groupId>
+                <groupId>io.github.davidricardo1026</groupId>
                 <artifactId>easytrans-processor</artifactId>
                 <version>1.0.0-SNAPSHOT</version>
             </path>
@@ -199,16 +199,16 @@ EasyTrans 默认会往生成的 Mapper、Bridge 和 Registry 类上加上 `@Comp
 dependencies {
   // 1. 引入 EasyTrans Starter (根据你的 Spring Boot 版本选择)
   // Spring Boot 3/4 选择:
-  implementation 'io.github.easytrans:easytrans-spring-boot-starter:1.0.0-SNAPSHOT'
+  implementation 'io.github.davidricardo1026:easytrans-spring-boot-starter:1.0.0-SNAPSHOT'
   // Spring Boot 2 选择:
-  // implementation 'io.github.easytrans:easytrans-spring-boot2-starter:1.0.0-SNAPSHOT'
+  // implementation 'io.github.davidricardo1026:easytrans-spring-boot2-starter:1.0.0-SNAPSHOT'
 
   implementation 'org.mapstruct:mapstruct:1.5.5.Final'
   compileOnly 'org.projectlombok:lombok:1.18.30'
 
   // 2. 声明注解处理器 (APT)
   annotationProcessor 'org.projectlombok:lombok:1.18.30'
-  annotationProcessor 'io.github.easytrans:easytrans-processor:1.0.0-SNAPSHOT'
+  annotationProcessor 'io.github.davidricardo1026:easytrans-processor:1.0.0-SNAPSHOT'
   annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
   annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0' // 保证 Lombok 与 MapStruct 绑定正常
 }
