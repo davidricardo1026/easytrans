@@ -37,12 +37,4 @@
         <developerConnection>scm:git:git@github.com:davidricardo1026/easytrans.git</developerConnection>
         <url>https://github.com/davidricardo1026/easytrans</url>
     </scm>
-
-    <dependencies>
-        <dependency>
-            <groupId>org.mapstruct</groupId>
-            <artifactId>mapstruct</artifactId>
-            <version>${mapstruct.version}</version>
-        </dependency>
-    </dependencies>
 </project>

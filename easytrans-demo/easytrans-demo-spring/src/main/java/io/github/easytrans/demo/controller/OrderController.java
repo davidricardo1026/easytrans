@@ -2,10 +2,7 @@ package io.github.easytrans.demo.controller;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import io.github.easytrans.demo.common.Result;
-import io.github.easytrans.demo.entity.po.ArchiveOrderItemPO;
-import io.github.easytrans.demo.entity.po.ArchiveOrderPO;
-import io.github.easytrans.demo.entity.po.OrderItemPO;
-import io.github.easytrans.demo.entity.po.OrderPO;
+import io.github.easytrans.demo.entity.po.*;
 import io.github.easytrans.demo.repository.ArchiveOrderItemMapper;
 import io.github.easytrans.demo.repository.ArchiveOrderMapper;
 import io.github.easytrans.demo.repository.OrderItemMapper;
@@ -19,12 +16,7 @@ import java.util.List;
 
 /**
  * 100% 干净、零侵入的 Controller。
- * 没有一个翻译相关的注解，只管查询和返回纯净的数据库 PO 对象！
- * <p>
- * 在这里，我们演示了：
- * 1. 活跃订单 (OrderPO) ➡️ 自动转义为 OrderVO 视图
- * 2. 归档订单 (ArchiveOrderPO) ➡️ 【同样】自动转义为相同的 OrderVO 视图
- * 完美的单视图模型，多数据源支持！
+ * 没有一个翻译相关的代码或手动调用，只管查询和返回纯净的实体 PO 对象！
  */
 @RestController
 @RequestMapping("/orders")
@@ -44,7 +36,7 @@ public class OrderController {
     }
 
     /**
-     * 1. 裸 List<OrderPO> 形式，自动转义为 List<OrderVO>
+     * 1. 裸 List<OrderPO> 形式，自动转义为 List<OrderPO> (就地填充 userName 和 goodsName)
      */
     @GetMapping
     public List<OrderPO> listOrders() {
@@ -52,7 +44,7 @@ public class OrderController {
     }
 
     /**
-     * 2. 裸单 OrderPO 形式，自动转义为 OrderVO
+     * 2. 裸单 OrderPO 形式，自动转义为 OrderPO (就地填充)
      */
     @GetMapping("/{id}")
     public OrderPO getOrder(@PathVariable Long id) {
@@ -86,7 +78,7 @@ public class OrderController {
     }
 
     /**
-     * 3. 包装格式 Result<List<OrderPO>> 形式，自动转义为 Result<List<OrderVO>>
+     * 3. 包装格式 Result<List<OrderPO>> 形式，自动转义为 Result<List<OrderPO>> (就地填充)
      */
     @GetMapping("/wrapped")
     public Result<List<OrderPO>> wrappedOrders() {
@@ -95,7 +87,7 @@ public class OrderController {
     }
 
     /**
-     * 4. 归档订单 List<ArchiveOrderPO> 形式，【同样且完全自动地】转义映射为 List<OrderVO>！
+     * 4. 归档订单 List<ArchiveOrderPO> 形式，自动转义为 List<ArchiveOrderPO> (就地填充)
      */
     @GetMapping("/archive")
     public List<ArchiveOrderPO> listArchiveOrders() {
@@ -105,6 +97,24 @@ public class OrderController {
                     Wrappers.<ArchiveOrderItemPO>query().eq("order_id", order.getId())
             );
             order.setItems(items);
+            if (items != null && !items.isEmpty()) {
+                order.setSingleItem(items.get(0));
+                order.setItemSet(new java.util.HashSet<>(items));
+
+                java.util.Map<String, ArchiveOrderItemPO> map = new java.util.HashMap<>();
+                map.put("itemKey", items.get(0));
+                order.setItemMap(map);
+
+                java.util.Map<String, List<ArchiveOrderItemPO>> nestedMap = new java.util.HashMap<>();
+                nestedMap.put("outerKey", items);
+                order.setNestedItemMap(nestedMap);
+
+                java.util.Map<String, java.util.Map<String, List<ArchiveOrderItemPO>>> deepMap = new java.util.HashMap<>();
+                java.util.Map<String, List<ArchiveOrderItemPO>> innerMap = new java.util.HashMap<>();
+                innerMap.put("innerKey", items);
+                deepMap.put("outerKey", innerMap);
+                order.setDeepNestedItemMap(deepMap);
+            }
         }
         return orders;
     }
@@ -113,8 +123,8 @@ public class OrderController {
      * 5. 变态级多层嵌套转义演示接口
      */
     @GetMapping("/extreme")
-    public io.github.easytrans.demo.entity.po.ExtremeNestedPO getExtremeNested() {
-        io.github.easytrans.demo.entity.po.ExtremeNestedPO po = new io.github.easytrans.demo.entity.po.ExtremeNestedPO();
+    public ExtremeNestedPO getExtremeNested() {
+        ExtremeNestedPO po = new ExtremeNestedPO();
         po.setId(999L);
 
         // 创建一些 OrderItemPO 数据
@@ -144,7 +154,6 @@ public class OrderController {
         java.util.Map<String, List<OrderItemPO>> valueMap = new java.util.HashMap<>();
         valueMap.put("valueKey", java.util.List.of(item1));
         java.util.Map<OrderItemPO, java.util.Map<String, List<OrderItemPO>>> transKeyMap = new java.util.HashMap<>();
-        // 使用 item2 作为 Key，valueMap 作为 Value
         transKeyMap.put(item2, valueMap);
         po.setPoTransMapComplex(transKeyMap);
 

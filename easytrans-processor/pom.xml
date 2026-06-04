@@ -12,7 +12,7 @@
 
     <artifactId>easytrans-processor</artifactId>
     <name>easytrans-processor</name>
-    <description>Annotation Processor for EasyTrans to generate mapstruct mappers and bridges dynamically</description>
+    <description>Annotation Processor for EasyTrans to generate translation bridges dynamically</description>
     <url>https://github.com/davidricardo1026/easytrans</url>
 
     <licenses>

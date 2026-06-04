@@ -19,7 +19,7 @@ public class EasyTransDemoApplicationTests {
     private MockMvc mockMvc;
 
     /**
-     * 测试 1：裸 List<OrderPO> 形式，自动转义为 List<OrderVO>
+     * 测试 1：裸 List<OrderPO> 形式，自动就地转义填充
      * - 校验订单列表大小、订单主体信息翻译（userId -> userName）
      * - 校验订单项嵌套列表的翻译（goodsId -> goodsName）
      */
@@ -62,7 +62,7 @@ public class EasyTransDemoApplicationTests {
     }
 
     /**
-     * 测试 2：裸单 OrderPO 形式，自动转义为 OrderVO
+     * 测试 2：裸单 OrderPO 形式，自动就地转义填充
      * - 校验单个对象的翻译（userId -> userName）以及子项的翻译
      */
     @Test
@@ -104,7 +104,7 @@ public class EasyTransDemoApplicationTests {
     }
 
     /**
-     * 测试 3：包装格式 Result<List<OrderPO>> 形式，自动转义为 Result<List<OrderVO>>
+     * 测试 3：包装格式 Result<List<OrderPO>> 形式，自动就地转义填充
      * - 验证切面对包装类的支持，不仅要解包翻译，还要装包还原
      */
     @Test
@@ -121,8 +121,8 @@ public class EasyTransDemoApplicationTests {
     }
 
     /**
-     * 测试 4：归档订单 List<ArchiveOrderPO> 形式，【同样且完全自动地】转义映射为 List<OrderVO>
-     * - 验证多数据源、多 PO 支持：同一视图类 (OrderVO) 在不同数据源下（归档 PO）依然能够完美映射与翻译
+     * 测试 4：归档订单 List<ArchiveOrderPO> 形式，【同样且完全自动地】就地转义填充
+     * - 验证多数据源、多 PO 支持：不同数据源下（归档 PO）依然能够完美就地翻译
      */
     @Test
     public void testArchiveOrders() throws Exception {

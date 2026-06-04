@@ -25,7 +25,8 @@ public class EasyTransV2AutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TranslationExecutor translationExecutor(List<TranslationFeeder> feeders) {
-        return new TranslationExecutor(feeders != null ? feeders : Collections.emptyList());
+    public TranslationExecutor translationExecutor(List<TranslationFeeder> feeders,
+                                                   TranslationRegistry translationRegistry) {
+        return new TranslationExecutor(feeders != null ? feeders : Collections.emptyList(), translationRegistry);
     }
 }

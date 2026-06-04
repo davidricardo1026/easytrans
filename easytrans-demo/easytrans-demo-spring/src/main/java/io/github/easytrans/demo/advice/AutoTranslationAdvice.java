@@ -1,6 +1,6 @@
 package io.github.easytrans.demo.advice;
 
-import io.github.easytrans.core.mapstruct.BaseTranslationMapper;
+import io.github.easytrans.core.bridge.BaseTranslationBridge;
 import io.github.easytrans.core.registry.TranslationRegistry;
 import io.github.easytrans.core.spi.TranslationExecutor;
 import io.github.easytrans.demo.common.Result;
@@ -16,11 +16,9 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 满足 80-90% 企业开发中常见场景的自动转义 ResponseBodyAdvice (100% 零侵入，用户无需编写任何注解！)
- * 支持：
- * 1. 裸 List<PO> 返回
- * 2. 裸单 PO 返回
- * 3. 统一包装格式 Result<List<PO>> 或 Result<PO> 返回
+ * 满足 100% 零侵入的就地翻译 ResponseBodyAdvice。
+ * 在 HTTP 响应前自动提取返回值，检查是否是标注了 @Translatable 的实体。
+ * 如果是，则在内存中高吞吐完成就地翻译填充，并原样返回实体对象。
  */
 @ControllerAdvice
 @SuppressWarnings({"rawtypes", "unchecked"})
@@ -36,7 +34,6 @@ public class AutoTranslationAdvice implements ResponseBodyAdvice<Object> {
 
     @Override
     public boolean supports(MethodParameter returnType, Class<? extends HttpMessageConverter<?>> converterType) {
-        // 全局拦截，但在 beforeBodyWrite 进行极低延迟的精准过滤
         return true;
     }
 
@@ -48,7 +45,6 @@ public class AutoTranslationAdvice implements ResponseBodyAdvice<Object> {
             return null;
         }
 
-        // 1. 解包：定位到真实的 PO 数据源 (裸单 PO, 裸 List, 还是包装在 Result 里的数据)
         Object rawData = body;
         boolean isResultWrapper = false;
         Result resultWrapper = null;
@@ -63,40 +59,28 @@ public class AutoTranslationAdvice implements ResponseBodyAdvice<Object> {
             return body;
         }
 
-        // 2. 统一获取 Source 类型，用于精准推断匹配的翻译器
-        Class<?> sourceClass;
+        Class<?> entityClass;
         List<Object> sourceList;
-        boolean isSingleElement = false;
 
         if (rawData instanceof List list) {
             if (list.isEmpty()) {
                 return body;
             }
             sourceList = (List<Object>) list;
-            sourceClass = sourceList.get(0).getClass();
+            entityClass = sourceList.get(0).getClass();
         } else {
             sourceList = Collections.singletonList(rawData);
-            sourceClass = rawData.getClass();
-            isSingleElement = true;
+            entityClass = rawData.getClass();
         }
 
-        // 3. 根据 Source 类精准匹配是否有编译生成的硬编码翻译器 (超轻量 Map 寻址，如果非 Source 直接秒回，极致性能无副作用)
-        BaseTranslationMapper<Object, Object> mapper = translationRegistry.findBySourceClass(sourceClass);
-        if (mapper == null) {
+        BaseTranslationBridge<?> bridge = translationRegistry.findByEntityClass(entityClass);
+        if (bridge == null) {
             return body;
         }
 
-        // 4. 一键完成：ID 收集、Feeder 并行/串行加载数据、MapStruct 编译期硬编码回填 VO，三合一一站式服务！
-        List<Object> targetList = translationExecutor.translate(sourceList, mapper);
+        // 统一在底层完成高性能、零反射、100% 纯内存就地翻译！
+        translationExecutor.translate(sourceList, (BaseTranslationBridge<Object>) bridge);
 
-        // 5. 装包并返回符合原接口定义的结构 (自动从 Source 升级成完美的 Target 视图对象)
-        Object finalData = isSingleElement ? targetList.get(0) : targetList;
-
-        if (isResultWrapper) {
-            resultWrapper.setData(finalData);
-            return resultWrapper;
-        }
-
-        return finalData;
+        return body;
     }
 }

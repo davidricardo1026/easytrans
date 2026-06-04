@@ -3,6 +3,8 @@ package io.github.easytrans.demo.entity.po;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import io.github.easytrans.core.annotation.Translatable;
+import io.github.easytrans.core.annotation.TranslateField;
 import lombok.Data;
 
 import java.util.List;
@@ -11,12 +13,17 @@ import java.util.Set;
 
 @Data
 @TableName("t_archive_order")
+@Translatable
 public class ArchiveOrderPO {
 
     @TableId
     private Long id;
 
     private Long userId;
+
+    @TableField(exist = false)
+    @TranslateField(source = "userId", type = "USER_SERVICE")
+    private String userName;
 
     @TableField(exist = false)
     private List<ArchiveOrderItemPO> items;

@@ -1,13 +1,11 @@
 package io.github.easytrans.demo.main;
 
-import io.github.easytrans.core.mapstruct.BaseTranslationMapper;
 import io.github.easytrans.core.registry.TranslationRegistry;
 import io.github.easytrans.core.spi.TranslationExecutor;
 import io.github.easytrans.core.spi.TranslationFeeder;
 import io.github.easytrans.demo.main.entity.po.OrderItemPO;
 import io.github.easytrans.demo.main.entity.po.OrderPO;
-import io.github.easytrans.demo.main.entity.vo.OrderVO;
-import io.github.easytrans.demo.main.entity.vo.generated.GeneratedTranslationRegistry;
+import io.github.easytrans.demo.main.entity.po.generated.registry.GeneratedTranslationRegistry;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,32 +36,23 @@ public class EasyTransMainApplication {
         feeders.add(new SimpleGoodsFeeder());
 
         // 4. 手动实例化转义执行器
-        TranslationExecutor translationExecutor = new TranslationExecutor(feeders);
+        TranslationExecutor translationExecutor = new TranslationExecutor(feeders, translationRegistry);
 
-        // 5. 获取 OrderPO 对应的映射转换器 Bridge 实例
-        BaseTranslationMapper<Object, Object> mapper = translationRegistry.findBySourceClass(OrderPO.class);
-        if (mapper == null) {
-            System.err.println("未找到对应的 TranslationMapper，请检查 VO 是否使用了 @TranslateFrom(OrderPO.class)");
-            return;
-        }
+        // 5. 执行核心转义就地翻译！
+        translationExecutor.translate(orderPOList);
 
-        // 6. 执行核心转义链路！ (包含 ID 递归收集、Feeder 批量加载、MapStruct 高速回填转换)
-        @SuppressWarnings("unchecked")
-        List<OrderVO> orderVOList = (List<OrderVO>) (List<?>) translationExecutor.translate((List<Object>) (List<?>) orderPOList,
-                                                                                            mapper);
-
-        // 7. 输出转义后的结果
-        System.out.println("\n【转义成功的 VO 数据列表】:");
-        for (OrderVO vo : orderVOList) {
-            System.out.println("订单 ID: " + vo.getId() + ", 用户 ID: " + vo.getUserId() + " -> 用户姓名: " + vo.getUserName());
-            if (vo.getItems() != null) {
-                for (var item : vo.getItems()) {
+        // 6. 输出转义后的结果
+        System.out.println("\n【转义成功的 PO 数据列表 (就地填充属性)】:");
+        for (OrderPO po : orderPOList) {
+            System.out.println("订单 ID: " + po.getId() + ", 用户 ID: " + po.getUserId() + " -> 用户姓名: " + po.getUserName());
+            if (po.getItems() != null) {
+                for (OrderItemPO item : po.getItems()) {
                     System.out.println("  └─ 子项 ID: " + item.getId() + ", 商品 ID: " + item.getGoodsId() + " -> 商品名称: " + item.getGoodsName());
                 }
             }
         }
 
-        System.out.println("\n=== 运行结束: 物理性能极限，零反射极速完成关联 ID 转义！ ===");
+        System.out.println("\n=== 运行结束: 物理性能极限，零反射极速完成关联 ID 就地转义！ ===");
     }
 
     private static List<OrderPO> createMockOrders() {

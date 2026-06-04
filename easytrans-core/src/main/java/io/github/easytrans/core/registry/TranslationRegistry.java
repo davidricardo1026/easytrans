@@ -1,16 +1,16 @@
 package io.github.easytrans.core.registry;
 
-import io.github.easytrans.core.mapstruct.BaseTranslationMapper;
+import io.github.easytrans.core.bridge.BaseTranslationBridge;
 
 /**
- * 转义注册表：用于根据输入的 Source 类型，寻找对应的 BaseTranslationMapper
+ * 转义注册表：用于根据实体类型寻找对应的 BaseTranslationBridge
  */
 public interface TranslationRegistry {
 
     @SuppressWarnings("unchecked")
-    default BaseTranslationMapper<Object, Object> findBySourceClass(Class<?> sourceClass) {
-        return (BaseTranslationMapper<Object, Object>) findMapperBySourceClass(sourceClass);
+    default <T> BaseTranslationBridge<T> findByEntityClass(Class<T> entityClass) {
+        return (BaseTranslationBridge<T>) findBridgeByEntityClass(entityClass);
     }
 
-    BaseTranslationMapper<?, ?> findMapperBySourceClass(Class<?> sourceClass);
+    BaseTranslationBridge<?> findBridgeByEntityClass(Class<?> entityClass);
 }

@@ -1,7 +1,7 @@
 package io.github.easytrans.processor;
 
+import io.github.easytrans.core.annotation.Translatable;
 import io.github.easytrans.core.annotation.TranslateField;
-import io.github.easytrans.core.annotation.TranslateFrom;
 
 import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
@@ -10,7 +10,6 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.MirroredTypesException;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
@@ -21,21 +20,21 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.*;
 
-@SupportedAnnotationTypes("io.github.easytrans.core.annotation.TranslateFrom")
+@SupportedAnnotationTypes("io.github.easytrans.core.annotation.Translatable")
 @SupportedSourceVersion(SourceVersion.RELEASE_17)
 @SupportedOptions({
         "easytrans.generated.package",
-        "easytrans.generated.mapper.package",
         "easytrans.generated.package.suffix",
-        "easytrans.generated.mapper.package.suffix",
+        "easytrans.generated.bridge.package",
+        "easytrans.generated.bridge.package.suffix",
         "easytrans.enable.spring"
 })
 public class EasyTransProcessor extends AbstractProcessor {
 
     private String optRegistryPkg;
-    private String optMapperPkg;
     private String optRegistrySuffix;
-    private String optMapperSuffix;
+    private String optBridgePkg;
+    private String optBridgeSuffix;
     private boolean enableSpring;
 
     private Elements elements;
@@ -53,10 +52,23 @@ public class EasyTransProcessor extends AbstractProcessor {
         this.filer = processingEnv.getFiler();
 
         Map<String, String> options = processingEnv.getOptions();
+
+        // 1. Registry 全包名限制（最高优先级）
         this.optRegistryPkg = options.get("easytrans.generated.package");
-        this.optMapperPkg = options.get("easytrans.generated.mapper.package");
-        this.optRegistrySuffix = options.getOrDefault("easytrans.generated.package.suffix", "generated");
-        this.optMapperSuffix = options.getOrDefault("easytrans.generated.mapper.package.suffix", "generated.mapper");
+
+        // 2. Registry 后缀（默认 "generated.registry"）
+        this.optRegistrySuffix = options.getOrDefault("easytrans.generated.package.suffix", "generated.registry");
+
+        // 3. Bridge 全包名限制（最高优先级，支持 mapper.package 别名进行后向兼容）
+        this.optBridgePkg = options.containsKey("easytrans.generated.bridge.package") ?
+                options.get("easytrans.generated.bridge.package") : options.get("easytrans.generated.mapper.package");
+
+        // 4. Bridge 后缀（默认 "generated"，支持 mapper.package.suffix 别名进行后向兼容）
+        this.optBridgeSuffix = options.containsKey("easytrans.generated.bridge.package.suffix") ?
+                options.get("easytrans.generated.bridge.package.suffix") :
+                options.getOrDefault("easytrans.generated.mapper.package.suffix", "generated");
+
+        // 5. Spring 环境支持开关（默认 true）
         this.enableSpring = Boolean.parseBoolean(options.getOrDefault("easytrans.enable.spring", "true"));
 
         TypeElement colEl = elements.getTypeElement("java.util.Collection");
@@ -65,26 +77,33 @@ public class EasyTransProcessor extends AbstractProcessor {
         this.mapTypeMirror = mapEl != null ? processingEnv.getTypeUtils().erasure(mapEl.asType()) : null;
     }
 
-    private String getMapperPackageName(String targetClassName) {
-        if (optMapperPkg != null && !optMapperPkg.isEmpty()) {
-            return optMapperPkg;
+    private String getBridgePackageName(String entityClassName) {
+        if (optBridgePkg != null && !optBridgePkg.isEmpty()) {
+            return optBridgePkg;
         }
-        int lastDot = targetClassName.lastIndexOf('.');
-        String voPkg = lastDot >= 0 ? targetClassName.substring(0, lastDot) : "";
-        return voPkg.isEmpty() ? optMapperSuffix : voPkg + "." + optMapperSuffix;
+        int lastDot = entityClassName.lastIndexOf('.');
+        String basePkg = lastDot >= 0 ? entityClassName.substring(0, lastDot) : "";
+        return basePkg.isEmpty() ? optBridgeSuffix : basePkg + "." + optBridgeSuffix;
     }
 
-    private String getRegistryPackageName(List<PairModel> pairs) {
+    private String getRegistryPackageName(List<EntityModel> models) {
         if (optRegistryPkg != null && !optRegistryPkg.isEmpty()) {
             return optRegistryPkg;
         }
-        if (pairs == null || pairs.isEmpty()) {
-            return "io.github.easytrans.generated";
+        if (models == null || models.isEmpty()) {
+            return "io.github.easytrans.generated.registry";
         }
-        String targetClassName = pairs.get(0).targetClassName;
-        int lastDot = targetClassName.lastIndexOf('.');
-        String voPkg = lastDot >= 0 ? targetClassName.substring(0, lastDot) : "";
-        return voPkg.isEmpty() ? optRegistrySuffix : voPkg + "." + optRegistrySuffix;
+        String entityClassName = models.get(0).entityClassName;
+        int lastDot = entityClassName.lastIndexOf('.');
+        String basePkg = lastDot >= 0 ? entityClassName.substring(0, lastDot) : "";
+        return basePkg.isEmpty() ? optRegistrySuffix : basePkg + "." + optRegistrySuffix;
+    }
+
+    private String getBridgeFullyQualifiedName(TypeElement element) {
+        String entityClassName = element.getQualifiedName().toString();
+        String pkg = getBridgePackageName(entityClassName);
+        String simpleName = element.getSimpleName().toString();
+        return pkg + "." + simpleName + "_TranslationBridge";
     }
 
     @Override
@@ -93,292 +112,167 @@ public class EasyTransProcessor extends AbstractProcessor {
             return false;
         }
 
-        List<PairModel> pairs = new ArrayList<>();
-        for (Element element : roundEnv.getElementsAnnotatedWith(TranslateFrom.class)) {
+        List<EntityModel> models = new ArrayList<>();
+        for (Element element : roundEnv.getElementsAnnotatedWith(Translatable.class)) {
             if (element.getKind() != ElementKind.CLASS) {
                 continue;
             }
             try {
-                pairs.addAll(analyzePair((TypeElement) element));
+                models.add(analyzeEntity((TypeElement) element));
             } catch (IllegalStateException ex) {
                 messager.printMessage(Diagnostic.Kind.ERROR, ex.getMessage(), element);
             }
         }
 
-        if (pairs.isEmpty()) {
+        if (models.isEmpty()) {
             return false;
         }
 
-        for (PairModel pair : pairs) {
-            writeMapStructMapper(pair);
-            writeMapperBridge(pair);
+        for (EntityModel model : models) {
+            writeBridge(model);
         }
-        writeTranslationRegistry(pairs);
+        writeTranslationRegistry(models);
 
         return false;
     }
 
-    private List<PairModel> analyzePair(TypeElement targetElement) {
-        if (targetElement.getAnnotation(TranslateFrom.class) == null) {
-            throw new IllegalStateException("@TranslateFrom 缺失");
-        }
-        String targetClassName = targetElement.getQualifiedName().toString();
-        List<String> sourceClassNames = resolveSourceClassNames(targetElement);
+    private EntityModel analyzeEntity(TypeElement element) {
+        EntityModel model = new EntityModel();
+        model.entityClassName = element.getQualifiedName().toString();
+        model.entitySimpleName = element.getSimpleName().toString();
+        model.bridgeSimpleName = model.entitySimpleName + "_TranslationBridge";
+        model.packageName = getBridgePackageName(model.entityClassName);
 
-        List<PairModel> models = new ArrayList<>();
+        Map<String, VariableElement> allFields = fieldMap(element);
 
-        for (String sourceClassName : sourceClassNames) {
-            TypeElement sourceElement = elements.getTypeElement(sourceClassName);
-            if (sourceElement == null) {
-                throw new IllegalStateException("找不到 Source 类型: " + sourceClassName);
+        for (VariableElement field : ElementFilter.fieldsIn(element.getEnclosedElements())) {
+            TranslateField translate = field.getAnnotation(TranslateField.class);
+            if (translate != null) {
+                String targetFieldName = field.getSimpleName().toString();
+                String sourceFieldName = translate.source();
+                if (!allFields.containsKey(sourceFieldName)) {
+                    throw new IllegalStateException("类: " + model.entityClassName + " 声明了翻译字段: " + targetFieldName + "，但找不到 source 关联字段: " + sourceFieldName);
+                }
+                TranslateFieldModel tf = new TranslateFieldModel();
+                tf.targetField = targetFieldName;
+                tf.sourceField = sourceFieldName;
+                tf.type = translate.type();
+                tf.sourceGetter = getter(sourceFieldName);
+                tf.targetSetter = "set" + capitalize(targetFieldName);
+                model.translateFields.add(tf);
+                continue;
             }
 
-            PairModel model = new PairModel();
-            model.targetClassName = targetClassName;
-            model.sourceClassName = sourceClassName;
-            model.targetSimpleName = targetElement.getSimpleName().toString();
-            model.sourceSimpleName = sourceElement.getSimpleName().toString();
-            model.mapperPackageName = getMapperPackageName(targetClassName);
-
-            model.mapperSimpleName = model.sourceSimpleName + "To" + model.targetSimpleName + "AutoMapper";
-            model.bridgeSimpleName = model.mapperSimpleName + "Bridge";
-
-            Map<String, VariableElement> sourceFields = fieldMap(sourceElement);
-            for (VariableElement targetField : ElementFilter.fieldsIn(targetElement.getEnclosedElements())) {
-                TranslateField translate = targetField.getAnnotation(TranslateField.class);
-                if (translate != null) {
-                    if (!sourceFields.containsKey(translate.source())) {
-                        throw new IllegalStateException("Source: " + sourceClassName + " 缺少字段: " + translate.source());
-                    }
-                    TranslateFieldModel tf = new TranslateFieldModel();
-                    tf.targetField = targetField.getSimpleName().toString();
-                    tf.sourceField = translate.source();
-                    tf.type = translate.type();
-                    tf.sourceGetter = getter(translate.source());
-                    model.translateFields.add(tf);
-                    continue;
-                }
-
-                String fieldName = targetField.getSimpleName().toString();
-                if (isTranslatable(targetField.asType())) {
-                    if (!sourceFields.containsKey(fieldName)) {
-                        throw new IllegalStateException("Source 缺少嵌套字段: " + fieldName);
-                    }
-                    NestedFieldModel nested = new NestedFieldModel();
-                    nested.fieldName = fieldName;
-                    nested.poFieldName = fieldName;
-                    nested.voFieldType = targetField.asType();
-                    nested.poFieldType = sourceFields.get(fieldName).asType();
-                    model.nestedFields.add(nested);
-                }
+            String fieldName = field.getSimpleName().toString();
+            if (isTranslatable(field.asType())) {
+                NestedFieldModel nested = new NestedFieldModel();
+                nested.fieldName = fieldName;
+                nested.fieldType = field.asType();
+                nested.getterName = getter(fieldName);
+                model.nestedFields.add(nested);
             }
-            models.add(model);
         }
-        return models;
+        return model;
     }
 
-    private void writeMapStructMapper(PairModel model) {
-        try {
-            String sourceParam = toPoParamName(model.sourceSimpleName);
-            StringBuilder body = new StringBuilder();
-            body.append("package ").append(model.mapperPackageName).append(";\n\n");
-            body.append("import io.github.easytrans.core.context.TranslationContext;\n");
-            body.append("import ").append(model.sourceClassName).append(";\n");
-            body.append("import ").append(model.targetClassName).append(";\n");
-            body.append("import org.mapstruct.Context;\n");
-            body.append("import org.mapstruct.Mapper;\n");
-            body.append("import org.mapstruct.Mapping;\n");
-            body.append("import java.util.List;\n");
-            body.append("import java.util.Set;\n");
-            body.append("import java.util.Map;\n\n");
-
-            Set<String> nestedMapperClassNames = new LinkedHashSet<>();
-            for (NestedFieldModel nested : model.nestedFields) {
-                Set<TypeElement> nestedTargets = new LinkedHashSet<>();
-                collectNestedTranslatables(nested.voFieldType, nestedTargets);
-                for (TypeElement targetNested : nestedTargets) {
-                    List<String> sources = resolveSourceClassNames(targetNested);
-                    for (String source : sources) {
-                        String mapperSimpleName = simpleName(source) + "To" + targetNested.getSimpleName().toString() + "AutoMapper";
-                        String mapperPkg = getMapperPackageName(targetNested.getQualifiedName().toString());
-                        nestedMapperClassNames.add(mapperPkg + "." + mapperSimpleName + ".class");
-                    }
-                }
-            }
-
-            String usesClause = "";
-            if (!nestedMapperClassNames.isEmpty()) {
-                usesClause = ", uses = {" + String.join(", ", nestedMapperClassNames) + "}";
-            }
-
-            if (enableSpring) {
-                body.append("@Mapper(componentModel = \"spring\"").append(usesClause).append(")\n");
-            } else {
-                if (nestedMapperClassNames.isEmpty()) {
-                    body.append("@Mapper\n");
-                } else {
-                    body.append("@Mapper(").append(usesClause.substring(2)).append(")\n");
-                }
-            }
-
-            body.append("public interface ").append(model.mapperSimpleName).append(" {\n\n");
-            for (TranslateFieldModel tf : model.translateFields) {
-                body.append("    @Mapping(target = \"").append(tf.targetField)
-                        .append("\", expression = \"java(context.getName(\\\"")
-                        .append(tf.type).append("\\\", ").append(sourceParam).append(".")
-                        .append(tf.sourceGetter).append("()))\")\n");
-            }
-            body.append("    ").append(model.targetSimpleName).append(" toVO(")
-                    .append(model.sourceSimpleName).append(" ").append(sourceParam)
-                    .append(", @Context TranslationContext context);\n\n");
-
-            body.append("    List<").append(model.targetSimpleName).append("> toVOList(List<")
-                    .append(model.sourceSimpleName).append("> pos, @Context TranslationContext context);\n\n");
-
-            body.append("    Set<").append(model.targetSimpleName).append("> toVOSet(Set<")
-                    .append(model.sourceSimpleName).append("> pos, @Context TranslationContext context);\n\n");
-
-            body.append("    default <K> Map<K, ").append(model.targetSimpleName).append("> toVOMap(Map<K, ")
-                    .append(model.sourceSimpleName).append("> pos, @Context TranslationContext context) {\n")
-                    .append("        if (pos == null) return null;\n")
-                    .append("        Map<K, ").append(model.targetSimpleName).append(
-                            "> map = new java.util.LinkedHashMap<>();\n")
-                    .append("        for (Map.Entry<K, ").append(model.sourceSimpleName).append(
-                            "> entry : pos.entrySet()) {\n")
-                    .append("            map.put(entry.getKey(), toVO(entry.getValue(), context));\n")
-                    .append("        }\n")
-                    .append("        return map;\n")
-                    .append("    }\n\n");
-
-            body.append("    default <K> Map<").append(model.targetSimpleName).append(", K> toVOMapKey(Map<")
-                    .append(model.sourceSimpleName).append(", K> pos, @Context TranslationContext context) {\n")
-                    .append("        if (pos == null) return null;\n")
-                    .append("        Map<").append(model.targetSimpleName).append(
-                            ", K> map = new java.util.LinkedHashMap<>();\n")
-                    .append("        for (Map.Entry<").append(model.sourceSimpleName).append(
-                            ", K> entry : pos.entrySet()) {\n")
-                    .append("            map.put(toVO(entry.getKey(), context), entry.getValue());\n")
-                    .append("        }\n")
-                    .append("        return map;\n")
-                    .append("    }\n\n");
-
-            Set<TypePair> signatures = new LinkedHashSet<>();
-            for (NestedFieldModel nested : model.nestedFields) {
-                collectIntermediateSignatures(nested.voFieldType, nested.poFieldType, signatures);
-            }
-
-            int sigIdx = 1;
-            for (TypePair pair : signatures) {
-                body.append("    ").append(pair.voStr).append(" mapNested").append(sigIdx++)
-                        .append("(").append(pair.poStr).append(" value, @Context TranslationContext context);\n\n");
-            }
-
-            body.append("}\n");
-
-            writeJava(model.mapperPackageName + "." + model.mapperSimpleName, body.toString());
-        } catch (IOException e) {
-            throw new IllegalStateException("生成 MapStruct Mapper 失败: " + model.mapperSimpleName, e);
-        }
-    }
-
-    private void writeMapperBridge(PairModel model) {
+    private void writeBridge(EntityModel model) {
         try {
             StringBuilder body = new StringBuilder();
-            body.append("package ").append(model.mapperPackageName).append(";\n\n");
+            body.append("package ").append(model.packageName).append(";\n\n");
             body.append("import io.github.easytrans.core.context.TranslationContext;\n");
-            body.append("import io.github.easytrans.core.mapstruct.BaseTranslationMapper;\n");
-            body.append("import ").append(model.sourceClassName).append(";\n");
-            body.append("import ").append(model.targetClassName).append(";\n");
+            body.append("import io.github.easytrans.core.bridge.BaseTranslationBridge;\n");
+            body.append("import ").append(model.entityClassName).append(";\n");
             if (enableSpring) {
-                body.append("import org.springframework.stereotype.Component;\n\n");
-            } else {
-                body.append("\n");
+                body.append("import org.springframework.stereotype.Component;\n");
             }
-            body.append("import java.util.ArrayList;\n");
             body.append("import java.util.List;\n\n");
+
             if (enableSpring) {
-                String beanName = "easytransBridge_" + model.mapperPackageName.replace('.',
-                                                                                       '_') + "_" + model.bridgeSimpleName;
+                String beanName = "easytransBridge_" + model.packageName.replace('.',
+                                                                                 '_') + "_" + model.bridgeSimpleName;
                 body.append("@Component(\"").append(beanName).append("\")\n");
             }
             body.append("public class ").append(model.bridgeSimpleName)
-                    .append(" implements BaseTranslationMapper<")
-                    .append(model.sourceSimpleName).append(", ").append(model.targetSimpleName).append("> {\n\n");
-
-            if (enableSpring) {
-                body.append("    private final ").append(model.mapperSimpleName).append(" delegate;\n\n");
-                body.append("    public ").append(model.bridgeSimpleName).append("(")
-                        .append(model.mapperSimpleName).append(" delegate) {\n");
-                body.append("        this.delegate = delegate;\n");
-                body.append("    }\n\n");
-            } else {
-                body.append("    private final ").append(model.mapperSimpleName).append(
-                                " delegate = org.mapstruct.factory.Mappers.getMapper(")
-                        .append(model.mapperSimpleName).append(".class);\n\n");
-                body.append("    public ").append(model.bridgeSimpleName).append("() {\n");
-                body.append("    }\n\n");
-            }
+                    .append(" implements BaseTranslationBridge<").append(model.entitySimpleName).append("> {\n\n");
 
             body.append("    @Override\n");
-            body.append("    public void extractAllIds(List<").append(model.sourceSimpleName)
-                    .append("> pos, TranslationContext context) {\n");
-            body.append("        extractIds(pos, context);\n");
+            body.append("    public void extractAllIds(List<").append(model.entitySimpleName).append(
+                    "> sources, TranslationContext context) {\n");
+            body.append("        extractIds(sources, context);\n");
             body.append("    }\n\n");
 
-            body.append("    public static void extractIds(List<").append(model.sourceSimpleName)
-                    .append("> pos, TranslationContext context) {\n");
-            body.append("        if (pos == null) {\n");
-            body.append("            return;\n");
-            body.append("        }\n");
-            body.append("        for (").append(model.sourceSimpleName).append(" po : pos) {\n");
-            body.append("            extractIds(po, context);\n");
+            body.append("    @Override\n");
+            body.append("    public void writeBack(List<").append(model.entitySimpleName).append(
+                    "> sources, TranslationContext context) {\n");
+            body.append("        fillTranslations(sources, context);\n");
+            body.append("    }\n\n");
+
+            body.append("    public static void extractIds(List<").append(model.entitySimpleName).append(
+                    "> sources, TranslationContext context) {\n");
+            body.append("        if (sources == null) return;\n");
+            body.append("        for (").append(model.entitySimpleName).append(" item : sources) {\n");
+            body.append("            extractIds(item, context);\n");
             body.append("        }\n");
             body.append("    }\n\n");
 
-            body.append("    public static void extractIds(").append(model.sourceSimpleName)
-                    .append(" po, TranslationContext context) {\n");
-            body.append("        if (po == null) {\n");
-            body.append("            return;\n");
-            body.append("        }\n");
+            body.append("    public static void extractIds(").append(model.entitySimpleName).append(
+                    " item, TranslationContext context) {\n");
+            body.append("        if (item == null) return;\n");
             for (TranslateFieldModel tf : model.translateFields) {
-                body.append("        context.collectId(\"")
-                        .append(tf.type).append("\", po.").append(tf.sourceGetter).append("());\n");
+                body.append("        if (item.").append(tf.sourceGetter).append("() != null) {\n");
+                body.append("            context.collectId(\"").append(tf.type).append("\", item.").append(tf.sourceGetter).append(
+                        "());\n");
+                body.append("        }\n");
             }
             for (NestedFieldModel nested : model.nestedFields) {
-                String poGetter = "po." + getter(nested.poFieldName) + "()";
-                String extractionCode = generateRecursiveExtract(nested.poFieldType,
-                                                                 nested.voFieldType,
-                                                                 poGetter,
-                                                                 1,
-                                                                 "        ");
+                String itemExpr = "item." + nested.getterName + "()";
+                String extractionCode = generateRecursiveExtract(nested.fieldType, itemExpr, 1, "        ");
                 body.append(extractionCode);
             }
             body.append("    }\n\n");
 
-            body.append("    @Override\n");
-            body.append("    public List<").append(model.targetSimpleName).append("> toTargetList(List<")
-                    .append(model.sourceSimpleName).append("> pos, TranslationContext context) {\n");
-            body.append("        return delegate.toVOList(pos, context);\n");
+            body.append("    public static void fillTranslations(List<").append(model.entitySimpleName).append(
+                    "> sources, TranslationContext context) {\n");
+            body.append("        if (sources == null) return;\n");
+            body.append("        for (").append(model.entitySimpleName).append(" item : sources) {\n");
+            body.append("            fillTranslations(item, context);\n");
+            body.append("        }\n");
+            body.append("    }\n\n");
+
+            body.append("    public static void fillTranslations(").append(model.entitySimpleName).append(
+                    " item, TranslationContext context) {\n");
+            body.append("        if (item == null) return;\n");
+            for (TranslateFieldModel tf : model.translateFields) {
+                body.append("        if (item.").append(tf.sourceGetter).append("() != null) {\n");
+                body.append("            item.").append(tf.targetSetter).append("(context.getName(\"").append(tf.type).append(
+                        "\", item.").append(tf.sourceGetter).append("()));\n");
+                body.append("        }\n");
+            }
+            for (NestedFieldModel nested : model.nestedFields) {
+                String itemExpr = "item." + nested.getterName + "()";
+                String writeBackCode = generateRecursiveWriteBack(nested.fieldType, itemExpr, 1, "        ");
+                body.append(writeBackCode);
+            }
             body.append("    }\n");
+
             body.append("}\n");
 
-            writeJava(model.mapperPackageName + "." + model.bridgeSimpleName, body.toString());
+            writeJava(model.packageName + "." + model.bridgeSimpleName, body.toString());
         } catch (IOException e) {
-            throw new IllegalStateException("生成 MapperBridge 失败: " + model.bridgeSimpleName, e);
+            throw new IllegalStateException("生成 TranslationBridge 失败: " + model.bridgeSimpleName, e);
         }
     }
 
-    private void writeTranslationRegistry(List<PairModel> pairs) {
+    private void writeTranslationRegistry(List<EntityModel> models) {
         try {
-            String registryPkg = getRegistryPackageName(pairs);
+            String registryPkg = getRegistryPackageName(models);
             StringBuilder body = new StringBuilder();
             body.append("package ").append(registryPkg).append(";\n\n");
-            body.append("import io.github.easytrans.core.mapstruct.BaseTranslationMapper;\n");
+            body.append("import io.github.easytrans.core.bridge.BaseTranslationBridge;\n");
             body.append("import io.github.easytrans.core.registry.TranslationRegistry;\n");
-            for (PairModel pair : pairs) {
-                body.append("import ").append(pair.sourceClassName).append(";\n");
-                body.append("import ").append(pair.mapperPackageName).append(".").append(pair.bridgeSimpleName).append(
-                        ";\n");
+            for (EntityModel model : models) {
+                body.append("import ").append(model.entityClassName).append(";\n");
+                body.append("import ").append(model.packageName).append(".").append(model.bridgeSimpleName).append(";\n");
             }
             if (enableSpring) {
                 body.append("import org.springframework.stereotype.Component;\n\n");
@@ -392,37 +286,37 @@ public class EasyTransProcessor extends AbstractProcessor {
                 body.append("@Component(\"").append(beanName).append("\")\n");
             }
             body.append("public class GeneratedTranslationRegistry implements TranslationRegistry {\n\n");
-            body.append("    private final Map<Class<?>, BaseTranslationMapper<?, ?>> bySourceClass;\n\n");
+            body.append("    private final Map<Class<?>, BaseTranslationBridge<?>> byEntityClass;\n\n");
 
             if (enableSpring) {
                 body.append("    public GeneratedTranslationRegistry(");
-                body.append(String.join(", ", pairs.stream()
-                        .map(p -> p.bridgeSimpleName + " " + toVarName(p.bridgeSimpleName)).toList()));
+                body.append(String.join(", ", models.stream()
+                        .map(m -> m.bridgeSimpleName + " " + toVarName(m.bridgeSimpleName)).toList()));
                 body.append(") {\n");
-                body.append("        Map<Class<?>, BaseTranslationMapper<?, ?>> map = new HashMap<>();\n");
-                for (PairModel pair : pairs) {
-                    String var = toVarName(pair.bridgeSimpleName);
-                    body.append("        map.put(").append(simpleName(pair.sourceClassName))
-                            .append(".class, ").append(var).append(");\n");
+                body.append("        Map<Class<?>, BaseTranslationBridge<?>> map = new HashMap<>();\n");
+                for (EntityModel model : models) {
+                    String var = toVarName(model.bridgeSimpleName);
+                    body.append("        map.put(").append(model.entitySimpleName).append(".class, ").append(var).append(
+                            ");\n");
                 }
-                body.append("        this.bySourceClass = Map.copyOf(map);\n");
+                body.append("        this.byEntityClass = Map.copyOf(map);\n");
                 body.append("    }\n\n");
             } else {
                 body.append("    public GeneratedTranslationRegistry() {\n");
-                body.append("        Map<Class<?>, BaseTranslationMapper<?, ?>> map = new HashMap<>();\n");
-                for (PairModel pair : pairs) {
-                    body.append("        map.put(").append(simpleName(pair.sourceClassName))
-                            .append(".class, new ").append(pair.mapperPackageName).append(".").append(pair.bridgeSimpleName).append(
-                                    "());\n");
+                body.append("        Map<Class<?>, BaseTranslationBridge<?>> map = new HashMap<>();\n");
+                for (EntityModel model : models) {
+                    body.append("        map.put(").append(model.entitySimpleName).append(".class, new ").append(model.packageName).append(
+                            ".").append(model.bridgeSimpleName).append("());\n");
                 }
-                body.append("        this.bySourceClass = Map.copyOf(map);\n");
+                body.append("        this.byEntityClass = Map.copyOf(map);\n");
                 body.append("    }\n\n");
             }
             body.append("    @Override\n");
-            body.append("    public BaseTranslationMapper<?, ?> findMapperBySourceClass(Class<?> sourceClass) {\n");
-            body.append("        return bySourceClass.get(sourceClass);\n");
+            body.append("    public BaseTranslationBridge<?> findBridgeByEntityClass(Class<?> entityClass) {\n");
+            body.append("        return byEntityClass.get(entityClass);\n");
             body.append("    }\n");
             body.append("}\n");
+
             writeJava(registryPkg + ".GeneratedTranslationRegistry", body.toString());
         } catch (IOException e) {
             throw new IllegalStateException("生成 TranslationRegistry 失败", e);
@@ -436,42 +330,12 @@ public class EasyTransProcessor extends AbstractProcessor {
         }
     }
 
-    private List<String> resolveSourceClassNames(Element element) {
-        TranslateFrom translateFrom = element.getAnnotation(TranslateFrom.class);
-        if (translateFrom == null) {
-            return List.of();
-        }
-        List<String> list = new ArrayList<>();
-        try {
-            Class<?>[] classes = translateFrom.value();
-            for (Class<?> clazz : classes) {
-                list.add(clazz.getCanonicalName());
-            }
-        } catch (MirroredTypesException ex) {
-            for (TypeMirror mirror : ex.getTypeMirrors()) {
-                list.add(mirror.toString());
-            }
-        }
-        return list;
-    }
-
     private Map<String, VariableElement> fieldMap(TypeElement typeElement) {
         Map<String, VariableElement> map = new LinkedHashMap<>();
         for (VariableElement field : ElementFilter.fieldsIn(typeElement.getEnclosedElements())) {
             map.put(field.getSimpleName().toString(), field);
         }
         return map;
-    }
-
-    private String toMapperSimpleName(String voSimpleName) {
-        if (voSimpleName.endsWith("VO")) {
-            return voSimpleName.substring(0, voSimpleName.length() - 2) + "AutoMapper";
-        }
-        return voSimpleName + "AutoMapper";
-    }
-
-    private String toPoParamName(String poSimpleName) {
-        return Character.toLowerCase(poSimpleName.charAt(0)) + poSimpleName.substring(1);
     }
 
     private String toVarName(String className) {
@@ -498,7 +362,7 @@ public class EasyTransProcessor extends AbstractProcessor {
         }
         DeclaredType declared = (DeclaredType) type;
         TypeElement element = (TypeElement) declared.asElement();
-        if (element.getAnnotation(TranslateFrom.class) != null) {
+        if (element.getAnnotation(Translatable.class) != null) {
             return true;
         }
         if (isCollection(type)) {
@@ -532,146 +396,32 @@ public class EasyTransProcessor extends AbstractProcessor {
         );
     }
 
-    private boolean isComplexNested(TypeMirror type) {
-        if (type.getKind() != TypeKind.DECLARED) {
-            return false;
-        }
-        DeclaredType declared = (DeclaredType) type;
-        TypeElement element = (TypeElement) declared.asElement();
-        if (element.getAnnotation(TranslateFrom.class) != null) {
-            return false;
-        }
-        if (isCollection(type)) {
-            TypeMirror itemType = declared.getTypeArguments().get(0);
-            if (itemType.getKind() == TypeKind.DECLARED) {
-                DeclaredType declaredItem = (DeclaredType) itemType;
-                if (declaredItem.asElement().getAnnotation(TranslateFrom.class) != null) {
-                    return false;
-                }
-            }
-            return isTranslatable(itemType);
-        }
-        if (isMap(type)) {
-            TypeMirror valueType = declared.getTypeArguments().get(1);
-            if (valueType.getKind() == TypeKind.DECLARED) {
-                DeclaredType declaredVal = (DeclaredType) valueType;
-                if (declaredVal.asElement().getAnnotation(TranslateFrom.class) != null) {
-                    return false;
-                }
-            }
-            return isTranslatable(valueType);
-        }
-        return false;
-    }
-
-    private void collectNestedTranslatables(TypeMirror type, Set<TypeElement> result) {
-        if (type.getKind() != TypeKind.DECLARED) {
-            return;
-        }
-        DeclaredType declared = (DeclaredType) type;
-        TypeElement element = (TypeElement) declared.asElement();
-        if (element.getAnnotation(TranslateFrom.class) != null) {
-            result.add(element);
-            return;
-        }
-        for (TypeMirror arg : declared.getTypeArguments()) {
-            collectNestedTranslatables(arg, result);
-        }
-    }
-
-    private int getNestingDepth(TypeMirror type) {
-        if (type.getKind() != TypeKind.DECLARED) {
-            return 0;
-        }
-        DeclaredType declared = (DeclaredType) type;
-        TypeElement element = (TypeElement) declared.asElement();
-        if (element.getAnnotation(TranslateFrom.class) != null) {
-            return 0;
-        }
-        if (isCollection(type)) {
-            if (!declared.getTypeArguments().isEmpty()) {
-                return 1 + getNestingDepth(declared.getTypeArguments().get(0));
-            }
-        }
-        if (isMap(type)) {
-            if (declared.getTypeArguments().size() >= 2) {
-                return 1 + Math.max(
-                        getNestingDepth(declared.getTypeArguments().get(0)),
-                        getNestingDepth(declared.getTypeArguments().get(1))
-                );
-            }
-        }
-        return 0;
-    }
-
-    private void collectIntermediateSignatures(TypeMirror voType, TypeMirror poType, Set<TypePair> signatures) {
-        if (voType.getKind() != TypeKind.DECLARED || poType.getKind() != TypeKind.DECLARED) {
-            return;
-        }
-        DeclaredType declaredVo = (DeclaredType) voType;
-        DeclaredType declaredPo = (DeclaredType) poType;
-        TypeElement elementVo = (TypeElement) declaredVo.asElement();
-
-        if (elementVo.getAnnotation(TranslateFrom.class) != null) {
-            return;
-        }
-
-        if (getNestingDepth(voType) > 1) {
-            signatures.add(new TypePair(voType, poType));
-        }
-
-        if (isCollection(voType)) {
-            if (!declaredVo.getTypeArguments().isEmpty() && !declaredPo.getTypeArguments().isEmpty()) {
-                TypeMirror voArg = declaredVo.getTypeArguments().get(0);
-                TypeMirror poArg = declaredPo.getTypeArguments().get(0);
-                if (isTranslatable(voArg)) {
-                    collectIntermediateSignatures(voArg, poArg, signatures);
-                }
-            }
-        } else if (isMap(voType)) {
-            if (declaredVo.getTypeArguments().size() >= 2 && declaredPo.getTypeArguments().size() >= 2) {
-                TypeMirror voKey = declaredVo.getTypeArguments().get(0);
-                TypeMirror poKey = declaredPo.getTypeArguments().get(0);
-                TypeMirror voVal = declaredVo.getTypeArguments().get(1);
-                TypeMirror poVal = declaredPo.getTypeArguments().get(1);
-                boolean transKey = isTranslatable(voKey);
-                boolean transVal = isTranslatable(voVal);
-                if (transKey) collectIntermediateSignatures(voKey, poKey, signatures);
-                if (transVal) collectIntermediateSignatures(voVal, poVal, signatures);
-            }
-        }
-    }
-
-    private String generateRecursiveExtract(TypeMirror poType,
-                                            TypeMirror voType,
+    private String generateRecursiveExtract(TypeMirror type,
                                             String expr,
                                             int depth,
                                             String indent) {
-        if (voType.getKind() != TypeKind.DECLARED) {
+        if (type.getKind() != TypeKind.DECLARED) {
             return "";
         }
-        DeclaredType declaredVo = (DeclaredType) voType;
-        DeclaredType declaredPo = (DeclaredType) poType;
-        TypeElement elementVo = (TypeElement) declaredVo.asElement();
+        DeclaredType declared = (DeclaredType) type;
+        TypeElement element = (TypeElement) declared.asElement();
 
-        if (elementVo.getAnnotation(TranslateFrom.class) != null) {
-            String bridgeClassName = getMapperPackageName(elementVo.getQualifiedName().toString()) + "." +
-                    simpleName(declaredPo.asElement().toString()) + "To" + elementVo.getSimpleName().toString() + "AutoMapperBridge";
+        if (element.getAnnotation(Translatable.class) != null) {
+            String bridgeClassName = getBridgeFullyQualifiedName(element);
             return indent + "if (" + expr + " != null) {\n" +
-                    indent + "    " + bridgeClassName + ".extractIds(" + expr + ", context);\n" +
+                    indent + "    " + bridgeClassName + ".extractIds(java.util.Collections.singletonList(" + expr + "), context);\n" +
                     indent + "}\n";
         }
 
-        if (isCollection(voType)) {
+        if (isCollection(type)) {
             String varName = "item" + depth;
-            String poItemType = declaredPo.getTypeArguments().get(0).toString();
+            String itemType = declared.getTypeArguments().get(0).toString();
             StringBuilder sb = new StringBuilder();
             sb.append(indent).append("if (").append(expr).append(" != null) {\n");
-            sb.append(indent).append("    for (").append(poItemType).append(" ").append(varName).append(" : ").append(
-                    expr).append(") {\n");
-            sb.append(generateRecursiveExtract(declaredPo.getTypeArguments().get(0),
-                                                      declaredVo.getTypeArguments().get(0),
-                                                      varName,
+            sb.append(indent).append("    for (").append(itemType).append(" ").append(varName).append(" : ").append(expr).append(
+                    ") {\n");
+            sb.append(generateRecursiveExtract(declared.getTypeArguments().get(0),
+                                               varName,
                                                depth + 1,
                                                indent + "        "));
             sb.append(indent).append("    }\n");
@@ -679,29 +429,27 @@ public class EasyTransProcessor extends AbstractProcessor {
             return sb.toString();
         }
 
-        if (isMap(voType)) {
+        if (isMap(type)) {
             String entryVar = "entry" + depth;
-            String keyTypePo = declaredPo.getTypeArguments().get(0).toString();
-            String valueTypePo = declaredPo.getTypeArguments().get(1).toString();
+            String keyType = declared.getTypeArguments().get(0).toString();
+            String valueType = declared.getTypeArguments().get(1).toString();
 
             StringBuilder sb = new StringBuilder();
             sb.append(indent).append("if (").append(expr).append(" != null) {\n");
-            sb.append(indent).append("    for (java.util.Map.Entry<").append(keyTypePo).append(", ").append(valueTypePo).append(
+            sb.append(indent).append("    for (java.util.Map.Entry<").append(keyType).append(", ").append(valueType).append(
                     "> ").append(entryVar).append(" : ").append(expr).append(".entrySet()) {\n");
             sb.append(indent).append("        if (").append(entryVar).append(" != null) {\n");
 
-            if (isTranslatable(declaredVo.getTypeArguments().get(0))) {
-                sb.append(generateRecursiveExtract(declaredPo.getTypeArguments().get(0),
-                                                          declaredVo.getTypeArguments().get(0),
-                                                          entryVar + ".getKey()",
+            if (isTranslatable(declared.getTypeArguments().get(0))) {
+                sb.append(generateRecursiveExtract(declared.getTypeArguments().get(0),
+                                                   entryVar + ".getKey()",
                                                    depth + 1,
                                                    indent + "            "));
             }
 
-            if (isTranslatable(declaredVo.getTypeArguments().get(1))) {
-                sb.append(generateRecursiveExtract(declaredPo.getTypeArguments().get(1),
-                                                          declaredVo.getTypeArguments().get(1),
-                                                          entryVar + ".getValue()",
+            if (isTranslatable(declared.getTypeArguments().get(1))) {
+                sb.append(generateRecursiveExtract(declared.getTypeArguments().get(1),
+                                                   entryVar + ".getValue()",
                                                    depth + 1,
                                                    indent + "            "));
             }
@@ -715,30 +463,78 @@ public class EasyTransProcessor extends AbstractProcessor {
         return "";
     }
 
-    private String indent(String code, String prefix) {
-        if (code == null || code.isEmpty()) {
+    private String generateRecursiveWriteBack(TypeMirror type,
+                                              String expr,
+                                              int depth,
+                                              String indent) {
+        if (type.getKind() != TypeKind.DECLARED) {
             return "";
         }
-        String[] lines = code.split("\n");
-        StringBuilder sb = new StringBuilder();
-        for (String line : lines) {
-            if (!line.isEmpty()) {
-                sb.append(prefix).append(line).append("\n");
-            } else {
-                sb.append("\n");
-            }
+        DeclaredType declared = (DeclaredType) type;
+        TypeElement element = (TypeElement) declared.asElement();
+
+        if (element.getAnnotation(Translatable.class) != null) {
+            String bridgeClassName = getBridgeFullyQualifiedName(element);
+            return indent + "if (" + expr + " != null) {\n" +
+                    indent + "    " + bridgeClassName + ".fillTranslations(java.util.Collections.singletonList(" + expr + "), context);\n" +
+                    indent + "}\n";
         }
-        return sb.toString();
+
+        if (isCollection(type)) {
+            String varName = "item" + depth;
+            String itemType = declared.getTypeArguments().get(0).toString();
+            StringBuilder sb = new StringBuilder();
+            sb.append(indent).append("if (").append(expr).append(" != null) {\n");
+            sb.append(indent).append("    for (").append(itemType).append(" ").append(varName).append(" : ").append(expr).append(
+                    ") {\n");
+            sb.append(generateRecursiveWriteBack(declared.getTypeArguments().get(0),
+                                                 varName,
+                                                 depth + 1,
+                                                 indent + "        "));
+            sb.append(indent).append("    }\n");
+            sb.append(indent).append("}\n");
+            return sb.toString();
+        }
+
+        if (isMap(type)) {
+            String entryVar = "entry" + depth;
+            String keyType = declared.getTypeArguments().get(0).toString();
+            String valueType = declared.getTypeArguments().get(1).toString();
+
+            StringBuilder sb = new StringBuilder();
+            sb.append(indent).append("if (").append(expr).append(" != null) {\n");
+            sb.append(indent).append("    for (java.util.Map.Entry<").append(keyType).append(", ").append(valueType).append(
+                    "> ").append(entryVar).append(" : ").append(expr).append(".entrySet()) {\n");
+            sb.append(indent).append("        if (").append(entryVar).append(" != null) {\n");
+
+            if (isTranslatable(declared.getTypeArguments().get(0))) {
+                sb.append(generateRecursiveWriteBack(declared.getTypeArguments().get(0),
+                                                     entryVar + ".getKey()",
+                                                     depth + 1,
+                                                     indent + "            "));
+            }
+
+            if (isTranslatable(declared.getTypeArguments().get(1))) {
+                sb.append(generateRecursiveWriteBack(declared.getTypeArguments().get(1),
+                                                     entryVar + ".getValue()",
+                                                     depth + 1,
+                                                     indent + "            "));
+            }
+
+            sb.append(indent).append("        }\n");
+            sb.append(indent).append("    }\n");
+            sb.append(indent).append("}\n");
+            return sb.toString();
+        }
+
+        return "";
     }
 
-    private static final class PairModel {
-        String targetClassName;
-        String sourceClassName;
-        String targetSimpleName;
-        String sourceSimpleName;
-        String mapperSimpleName;
+    private static final class EntityModel {
+        String entityClassName;
+        String entitySimpleName;
         String bridgeSimpleName;
-        String mapperPackageName;
+        String packageName;
         final List<TranslateFieldModel> translateFields = new ArrayList<>();
         final List<NestedFieldModel> nestedFields = new ArrayList<>();
     }
@@ -748,39 +544,12 @@ public class EasyTransProcessor extends AbstractProcessor {
         String sourceField;
         String type;
         String sourceGetter;
+        String targetSetter;
     }
 
     private static final class NestedFieldModel {
         String fieldName;
-        String poFieldName;
-        TypeMirror voFieldType;
-        TypeMirror poFieldType;
-    }
-
-    private static final class TypePair {
-        TypeMirror voType;
-        TypeMirror poType;
-        String voStr;
-        String poStr;
-
-        public TypePair(TypeMirror voType, TypeMirror poType) {
-            this.voType = voType;
-            this.poType = poType;
-            this.voStr = voType.toString();
-            this.poStr = poType.toString();
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof TypePair)) return false;
-            TypePair typePair = (TypePair) o;
-            return voStr.equals(typePair.voStr) && poStr.equals(typePair.poStr);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(voStr, poStr);
-        }
+        TypeMirror fieldType;
+        String getterName;
     }
 }

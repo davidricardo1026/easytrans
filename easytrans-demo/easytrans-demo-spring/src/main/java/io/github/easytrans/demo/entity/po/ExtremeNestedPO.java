@@ -1,5 +1,6 @@
 package io.github.easytrans.demo.entity.po;
 
+import io.github.easytrans.core.annotation.Translatable;
 import lombok.Data;
 
 import java.util.List;
@@ -7,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Data
+@Translatable
 public class ExtremeNestedPO {
     private Long id;
 

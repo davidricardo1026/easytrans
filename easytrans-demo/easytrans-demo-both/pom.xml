@@ -27,12 +27,6 @@
             <version>${lombok.version}</version>
             <scope>provided</scope>
         </dependency>
-
-        <dependency>
-            <groupId>org.mapstruct</groupId>
-            <artifactId>mapstruct</artifactId>
-            <version>${mapstruct.version}</version>
-        </dependency>
     </dependencies>
 
     <build>
@@ -46,10 +40,10 @@
                     <target>17</target>
                     <compilerArgs>
                         <!-- 同时配置后缀和全包名，测试全包名优先级高于后缀 -->
-                        <arg>-Aeasytrans.generated.package.suffix=customgen</arg>
-                        <arg>-Aeasytrans.generated.mapper.package.suffix=customgen.mapper</arg>
+                        <arg>-Aeasytrans.generated.package.suffix=customgen.registry</arg>
+                        <arg>-Aeasytrans.generated.bridge.package.suffix=customgen.bridge</arg>
                         <arg>-Aeasytrans.generated.package=io.github.easytrans.test.both.registry</arg>
-                        <arg>-Aeasytrans.generated.mapper.package=io.github.easytrans.test.both.mapper</arg>
+                        <arg>-Aeasytrans.generated.bridge.package=io.github.easytrans.test.both.bridge</arg>
                         <arg>-Aeasytrans.enable.spring=false</arg>
                     </compilerArgs>
                     <annotationProcessorPaths>
@@ -62,16 +56,6 @@
                             <groupId>io.github.davidricardo1026</groupId>
                             <artifactId>easytrans-processor</artifactId>
                             <version>${project.version}</version>
-                        </path>
-                        <path>
-                            <groupId>org.mapstruct</groupId>
-                            <artifactId>mapstruct-processor</artifactId>
-                            <version>${mapstruct.version}</version>
-                        </path>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok-mapstruct-binding</artifactId>
-                            <version>0.2.0</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
