@@ -24,10 +24,8 @@
 * **多数据源支持（一对多映射）**：
   VO 的 `@TranslateFrom` 注解支持配置多个 Source PO。例如活跃订单 `OrderPO` 与归档订单 `ArchiveOrderPO` 可以自动转义并升级到同一个
   `OrderVO` 视图中。
-* **三大基础嵌套结构完美支持 (Single value, Collection, Map)**：
-  无论是单值对象 (嵌套 `VO`)、任何集合类型 (如 `List`/`Set`)、还是 Map 结构 (Map 的 Key 或 Value 为可转义对象，如
-  `Map<String, OrderItemVO>`)，框架都能在**编译期**自动识别、递归生成硬编码的 ID 抽取逻辑 (EntrySet / Loops 嵌套循环)
-  ，并无缝配合 MapStruct 完成高维度的类型映射。树形、嵌套等复杂关联关系 100% 完美支持。
+* **三大基础嵌套结构与无限层级递归完美支持 (Single value, Collection, Map)**：
+  无论是单值对象 (嵌套 `VO`/`DTO`)、任何集合类型 (如 `List`/`Set`/`Collection`)、还是多维嵌套 Map 结构 (Map 的 Key 或者是 Value 为可转义对象，如 `Map<String, Map<String, List<OrderItemVO>>>`)，框架都能在**编译期**自动识别并**无限层级递归**地生成极速硬编码 ID 抽取逻辑 (无反射嵌套 Loop/EntrySet)，并无缝配合 MapStruct 完成高维度类型映射，100% 完美吞噬任意变态深度的树状嵌套结构，绝不留下 1% 的死角。
 
 ---
 
@@ -248,8 +246,11 @@ public class OrderVO {
     @TranslateField(source = "userId", type = "USER_SERVICE")
     private String userName; 
     
-    // 自动支持嵌套列表的深层递归转义！
+    // 自动支持嵌套列表、嵌套集合、嵌套 Map 或多维 Map 复合体的无限层级递归转义！
     private List<OrderItemVO> items;
+    private Set<OrderItemVO> itemSet;
+    private Map<String, OrderItemVO> itemMap;
+    private Map<String, Map<String, List<OrderItemVO>>> deepNestedItemMap;
 }
 ```
 
