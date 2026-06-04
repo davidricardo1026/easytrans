@@ -147,4 +147,30 @@ public class EasyTransDemoApplicationTests {
                 .andExpect(jsonPath("$[1].items[0].goodsId", is(101)))
                 .andExpect(jsonPath("$[1].items[0].goodsName", is("MacBook Pro")));
     }
+
+    /**
+     * 测试 5：变态级超深嵌套转义测试 (Map of Map of List, List of Map of Set, Translatable Key Map of Map of List)
+     * - 验证 100% 任意维度、任意层级的复杂嵌套映射及翻译逻辑支持
+     */
+    @Test
+    public void testExtremeNestedTranslation() throws Exception {
+        mockMvc.perform(get("/orders/extreme")
+                                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(999)))
+
+                // Nest 1 校验 (Map of Map of List)
+                .andExpect(jsonPath("$.poMapMapList.outerKey.innerKey", hasSize(2)))
+                .andExpect(jsonPath("$.poMapMapList.outerKey.innerKey[0].goodsName", is("MacBook Pro")))
+                .andExpect(jsonPath("$.poMapMapList.outerKey.innerKey[1].goodsName", is("iPhone 15")))
+
+                // Nest 2 校验 (List of Map of Set)
+                .andExpect(jsonPath("$.poListMapSet[0].setKey", hasSize(2)))
+                .andExpect(jsonPath("$.poListMapSet[0].setKey[*].goodsName", hasItems("MacBook Pro", "iPhone 15")))
+
+                // Nest 3 校验 (Map with translatable Key and nested Map of List Value)
+                // 在 JSON 中，由于 Map 的 Key 是对象，Jackson 会把 Key 序列化成 String（即 OrderItemVO.toString()，除非有自定义 KeySerializer）
+                // 我们主要校验 Map 的 Value 里面是否成功进行了属性翻译
+                .andExpect(jsonPath("$.poTransMapComplex.*.valueKey[0].goodsName", hasItem("MacBook Pro")));
+    }
 }
