@@ -58,9 +58,29 @@ public class OrderController {
     public OrderPO getOrder(@PathVariable Long id) {
         OrderPO order = orderMapper.selectById(id);
         if (order != null) {
-            order.setItems(orderItemMapper.selectList(
+            List<OrderItemPO> items = orderItemMapper.selectList(
                     Wrappers.<OrderItemPO>query().eq("order_id", order.getId())
-            ));
+            );
+            order.setItems(items);
+            if (items != null && !items.isEmpty()) {
+                order.setSingleItem(items.get(0));
+                order.setItemSet(new java.util.HashSet<>(items));
+
+                java.util.Map<String, OrderItemPO> map = new java.util.HashMap<>();
+                map.put("itemKey", items.get(0));
+                order.setItemMap(map);
+
+                java.util.Map<String, List<OrderItemPO>> nestedMap = new java.util.HashMap<>();
+                nestedMap.put("outerKey", items);
+                order.setNestedItemMap(nestedMap);
+
+                // 5. Deep Nested Map (Map of Map of List)
+                java.util.Map<String, java.util.Map<String, List<OrderItemPO>>> deepMap = new java.util.HashMap<>();
+                java.util.Map<String, List<OrderItemPO>> innerMap = new java.util.HashMap<>();
+                innerMap.put("innerKey", items);
+                deepMap.put("outerKey", innerMap);
+                order.setDeepNestedItemMap(deepMap);
+            }
         }
         return order;
     }
@@ -96,6 +116,29 @@ public class OrderController {
                     Wrappers.<OrderItemPO>query().eq("order_id", order.getId())
             );
             order.setItems(items);
+            if (items != null && !items.isEmpty()) {
+                // 1. Single Value (Nested Object)
+                order.setSingleItem(items.get(0));
+
+                // 2. Collection (Set)
+                order.setItemSet(new java.util.HashSet<>(items));
+
+                // 3. Map
+                java.util.Map<String, OrderItemPO> map = new java.util.HashMap<>();
+                map.put("itemKey", items.get(0));
+                order.setItemMap(map);
+
+                java.util.Map<String, List<OrderItemPO>> nestedMap = new java.util.HashMap<>();
+                nestedMap.put("outerKey", items);
+                order.setNestedItemMap(nestedMap);
+
+                // 5. Deep Nested Map (Map of Map of List)
+                java.util.Map<String, java.util.Map<String, List<OrderItemPO>>> deepMap = new java.util.HashMap<>();
+                java.util.Map<String, List<OrderItemPO>> innerMap = new java.util.HashMap<>();
+                innerMap.put("innerKey", items);
+                deepMap.put("outerKey", innerMap);
+                order.setDeepNestedItemMap(deepMap);
+            }
         }
         return orders;
     }

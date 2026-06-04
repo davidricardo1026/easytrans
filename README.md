@@ -24,8 +24,10 @@
 * **多数据源支持（一对多映射）**：
   VO 的 `@TranslateFrom` 注解支持配置多个 Source PO。例如活跃订单 `OrderPO` 与归档订单 `ArchiveOrderPO` 可以自动转义并升级到同一个
   `OrderVO` 视图中。
-* **深层嵌套对象支持**：
-  完美的树形或嵌套集合结构支持（例如 `OrderPO` 内嵌套了 `List<OrderItemPO>`），框架能自动在深层递归收集 `goodsId` 并完成多级转换。
+* **三大基础嵌套结构完美支持 (Single value, Collection, Map)**：
+  无论是单值对象 (嵌套 `VO`)、任何集合类型 (如 `List`/`Set`)、还是 Map 结构 (Map 的 Key 或 Value 为可转义对象，如
+  `Map<String, OrderItemVO>`)，框架都能在**编译期**自动识别、递归生成硬编码的 ID 抽取逻辑 (EntrySet / Loops 嵌套循环)
+  ，并无缝配合 MapStruct 完成高维度的类型映射。树形、嵌套等复杂关联关系 100% 完美支持。
 
 ---
 

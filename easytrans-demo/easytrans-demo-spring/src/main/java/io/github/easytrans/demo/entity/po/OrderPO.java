@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Data
 @TableName("t_order")
@@ -18,4 +20,24 @@ public class OrderPO {
 
     @TableField(exist = false)
     private List<OrderItemPO> items;
+
+    // 1. Single Value (Nested Object)
+    @TableField(exist = false)
+    private OrderItemPO singleItem;
+
+    // 2. Collection (Set)
+    @TableField(exist = false)
+    private Set<OrderItemPO> itemSet;
+
+    // 3. Map
+    @TableField(exist = false)
+    private Map<String, OrderItemPO> itemMap;
+
+    // 4. Map of Collection
+    @TableField(exist = false)
+    private Map<String, List<OrderItemPO>> nestedItemMap;
+
+    // 5. Deep Nested Map (Map of Map of List)
+    @TableField(exist = false)
+    private Map<String, Map<String, List<OrderItemPO>>> deepNestedItemMap;
 }

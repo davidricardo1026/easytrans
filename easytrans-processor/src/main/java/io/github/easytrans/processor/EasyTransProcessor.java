@@ -42,6 +42,9 @@ public class EasyTransProcessor extends AbstractProcessor {
     private Messager messager;
     private Filer filer;
 
+    private TypeMirror collectionTypeMirror;
+    private TypeMirror mapTypeMirror;
+
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
         super.init(processingEnv);
@@ -55,6 +58,11 @@ public class EasyTransProcessor extends AbstractProcessor {
         this.optRegistrySuffix = options.getOrDefault("easytrans.generated.package.suffix", "generated");
         this.optMapperSuffix = options.getOrDefault("easytrans.generated.mapper.package.suffix", "generated.mapper");
         this.enableSpring = Boolean.parseBoolean(options.getOrDefault("easytrans.enable.spring", "true"));
+
+        TypeElement colEl = elements.getTypeElement("java.util.Collection");
+        this.collectionTypeMirror = colEl != null ? processingEnv.getTypeUtils().erasure(colEl.asType()) : null;
+        TypeElement mapEl = elements.getTypeElement("java.util.Map");
+        this.mapTypeMirror = mapEl != null ? processingEnv.getTypeUtils().erasure(mapEl.asType()) : null;
     }
 
     private String getMapperPackageName(String targetClassName) {
@@ -150,74 +158,23 @@ public class EasyTransProcessor extends AbstractProcessor {
                     model.translateFields.add(tf);
                     continue;
                 }
-                NestedFieldModel nested = analyzeNestedField(targetField, sourceFields);
-                if (nested != null) {
+
+                String fieldName = targetField.getSimpleName().toString();
+                if (isTranslatable(targetField.asType())) {
+                    if (!sourceFields.containsKey(fieldName)) {
+                        throw new IllegalStateException("Source 缺少嵌套字段: " + fieldName);
+                    }
+                    NestedFieldModel nested = new NestedFieldModel();
+                    nested.fieldName = fieldName;
+                    nested.poFieldName = fieldName;
+                    nested.voFieldType = targetField.asType();
+                    nested.poFieldType = sourceFields.get(fieldName).asType();
                     model.nestedFields.add(nested);
                 }
             }
             models.add(model);
         }
         return models;
-    }
-
-    private NestedFieldModel analyzeNestedField(VariableElement targetField,
-                                                Map<String, VariableElement> sourceFields) {
-        TypeMirror targetFieldType = targetField.asType();
-        if (targetFieldType.getKind() != TypeKind.DECLARED) {
-            return null;
-        }
-        DeclaredType declared = (DeclaredType) targetFieldType;
-        if (!declared.asElement().toString().equals("java.util.List")) {
-            return null;
-        }
-        if (declared.getTypeArguments().isEmpty()) {
-            return null;
-        }
-        TypeMirror arg = declared.getTypeArguments().get(0);
-        if (arg.getKind() != TypeKind.DECLARED) {
-            return null;
-        }
-        Element nestedTargetElement = ((DeclaredType) arg).asElement();
-        if (nestedTargetElement.getAnnotation(TranslateFrom.class) == null) {
-            return null;
-        }
-        String fieldName = targetField.getSimpleName().toString();
-        if (!sourceFields.containsKey(fieldName)) {
-            throw new IllegalStateException("Source 缺少嵌套字段: " + fieldName);
-        }
-
-        NestedFieldModel nested = new NestedFieldModel();
-        nested.fieldName = fieldName;
-
-        VariableElement sourceField = sourceFields.get(fieldName);
-        TypeMirror sourceFieldType = sourceField.asType();
-        String detectedSourceItemClassName = null;
-        if (sourceFieldType.getKind() == TypeKind.DECLARED) {
-            DeclaredType sourceDeclared = (DeclaredType) sourceFieldType;
-            if (sourceDeclared.asElement().toString().equals("java.util.List") && !sourceDeclared.getTypeArguments().isEmpty()) {
-                TypeMirror sourceArg = sourceDeclared.getTypeArguments().get(0);
-                if (sourceArg.getKind() == TypeKind.DECLARED) {
-                    detectedSourceItemClassName = ((DeclaredType) sourceArg).toString();
-                }
-            }
-        }
-
-        List<String> nestedSourceNames = resolveSourceClassNames(nestedTargetElement);
-        if (nestedSourceNames.isEmpty()) {
-            return null;
-        }
-
-        if (detectedSourceItemClassName != null && nestedSourceNames.contains(detectedSourceItemClassName)) {
-            nested.sourceItemClassName = detectedSourceItemClassName;
-        } else {
-            nested.sourceItemClassName = nestedSourceNames.get(0);
-        }
-
-        nested.nestedTargetClassName = ((TypeElement) nestedTargetElement).getQualifiedName().toString();
-        nested.sourceItemSimpleName = elements.getTypeElement(nested.sourceItemClassName).getSimpleName().toString();
-        nested.nestedMapperSimpleName = nested.sourceItemSimpleName + "To" + nestedTargetElement.getSimpleName().toString() + "AutoMapper";
-        nested.nestedMapperClassName = getMapperPackageName(nested.nestedTargetClassName) + "." + nested.nestedMapperSimpleName;
-        return nested;
     }
 
     private void writeMapStructMapper(PairModel model) {
@@ -230,21 +187,37 @@ public class EasyTransProcessor extends AbstractProcessor {
             body.append("import ").append(model.targetClassName).append(";\n");
             body.append("import org.mapstruct.Context;\n");
             body.append("import org.mapstruct.Mapper;\n");
-            body.append("import org.mapstruct.Mapping;\n\n");
+            body.append("import org.mapstruct.Mapping;\n");
+            body.append("import java.util.List;\n");
+            body.append("import java.util.Set;\n");
+            body.append("import java.util.Map;\n\n");
+
+            Set<String> nestedMapperClassNames = new LinkedHashSet<>();
+            for (NestedFieldModel nested : model.nestedFields) {
+                Set<TypeElement> nestedTargets = new LinkedHashSet<>();
+                collectNestedTranslatables(nested.voFieldType, nestedTargets);
+                for (TypeElement targetNested : nestedTargets) {
+                    List<String> sources = resolveSourceClassNames(targetNested);
+                    for (String source : sources) {
+                        String mapperSimpleName = simpleName(source) + "To" + targetNested.getSimpleName().toString() + "AutoMapper";
+                        String mapperPkg = getMapperPackageName(targetNested.getQualifiedName().toString());
+                        nestedMapperClassNames.add(mapperPkg + "." + mapperSimpleName + ".class");
+                    }
+                }
+            }
+
+            String usesClause = "";
+            if (!nestedMapperClassNames.isEmpty()) {
+                usesClause = ", uses = {" + String.join(", ", nestedMapperClassNames) + "}";
+            }
 
             if (enableSpring) {
-                String usesClause = model.nestedFields.isEmpty()
-                        ? ""
-                        : ", uses = {" + String.join(", ", model.nestedFields.stream()
-                        .map(n -> n.nestedMapperClassName + ".class").distinct().toList()) + "}";
                 body.append("@Mapper(componentModel = \"spring\"").append(usesClause).append(")\n");
             } else {
-                if (model.nestedFields.isEmpty()) {
+                if (nestedMapperClassNames.isEmpty()) {
                     body.append("@Mapper\n");
                 } else {
-                    String usesClause = "uses = {" + String.join(", ", model.nestedFields.stream()
-                            .map(n -> n.nestedMapperClassName + ".class").distinct().toList()) + "}";
-                    body.append("@Mapper(").append(usesClause).append(")\n");
+                    body.append("@Mapper(").append(usesClause.substring(2)).append(")\n");
                 }
             }
 
@@ -257,7 +230,49 @@ public class EasyTransProcessor extends AbstractProcessor {
             }
             body.append("    ").append(model.targetSimpleName).append(" toVO(")
                     .append(model.sourceSimpleName).append(" ").append(sourceParam)
-                    .append(", @Context TranslationContext context);\n");
+                    .append(", @Context TranslationContext context);\n\n");
+
+            body.append("    List<").append(model.targetSimpleName).append("> toVOList(List<")
+                    .append(model.sourceSimpleName).append("> pos, @Context TranslationContext context);\n\n");
+
+            body.append("    Set<").append(model.targetSimpleName).append("> toVOSet(Set<")
+                    .append(model.sourceSimpleName).append("> pos, @Context TranslationContext context);\n\n");
+
+            body.append("    default <K> Map<K, ").append(model.targetSimpleName).append("> toVOMap(Map<K, ")
+                    .append(model.sourceSimpleName).append("> pos, @Context TranslationContext context) {\n")
+                    .append("        if (pos == null) return null;\n")
+                    .append("        Map<K, ").append(model.targetSimpleName).append(
+                            "> map = new java.util.LinkedHashMap<>();\n")
+                    .append("        for (Map.Entry<K, ").append(model.sourceSimpleName).append(
+                            "> entry : pos.entrySet()) {\n")
+                    .append("            map.put(entry.getKey(), toVO(entry.getValue(), context));\n")
+                    .append("        }\n")
+                    .append("        return map;\n")
+                    .append("    }\n\n");
+
+            body.append("    default <K> Map<").append(model.targetSimpleName).append(", K> toVOMapKey(Map<")
+                    .append(model.sourceSimpleName).append(", K> pos, @Context TranslationContext context) {\n")
+                    .append("        if (pos == null) return null;\n")
+                    .append("        Map<").append(model.targetSimpleName).append(
+                            ", K> map = new java.util.LinkedHashMap<>();\n")
+                    .append("        for (Map.Entry<").append(model.sourceSimpleName).append(
+                            ", K> entry : pos.entrySet()) {\n")
+                    .append("            map.put(toVO(entry.getKey(), context), entry.getValue());\n")
+                    .append("        }\n")
+                    .append("        return map;\n")
+                    .append("    }\n\n");
+
+            Set<TypePair> signatures = new LinkedHashSet<>();
+            for (NestedFieldModel nested : model.nestedFields) {
+                collectIntermediateSignatures(nested.voFieldType, nested.poFieldType, signatures);
+            }
+
+            int sigIdx = 1;
+            for (TypePair pair : signatures) {
+                body.append("    ").append(pair.voStr).append(" mapNested").append(sigIdx++)
+                        .append("(").append(pair.poStr).append(" value, @Context TranslationContext context);\n\n");
+            }
+
             body.append("}\n");
 
             writeJava(model.mapperPackageName + "." + model.mapperSimpleName, body.toString());
@@ -274,9 +289,6 @@ public class EasyTransProcessor extends AbstractProcessor {
             body.append("import io.github.easytrans.core.mapstruct.BaseTranslationMapper;\n");
             body.append("import ").append(model.sourceClassName).append(";\n");
             body.append("import ").append(model.targetClassName).append(";\n");
-            for (NestedFieldModel nested : model.nestedFields) {
-                body.append("import ").append(nested.sourceItemClassName).append(";\n");
-            }
             if (enableSpring) {
                 body.append("import org.springframework.stereotype.Component;\n\n");
             } else {
@@ -310,76 +322,45 @@ public class EasyTransProcessor extends AbstractProcessor {
             body.append("    @Override\n");
             body.append("    public void extractAllIds(List<").append(model.sourceSimpleName)
                     .append("> pos, TranslationContext context) {\n");
+            body.append("        extractIds(pos, context);\n");
+            body.append("    }\n\n");
+
+            body.append("    public static void extractIds(List<").append(model.sourceSimpleName)
+                    .append("> pos, TranslationContext context) {\n");
             body.append("        if (pos == null) {\n");
             body.append("            return;\n");
             body.append("        }\n");
             body.append("        for (").append(model.sourceSimpleName).append(" po : pos) {\n");
-            body.append("            if (po == null) {\n");
-            body.append("                continue;\n");
-            body.append("            }\n");
+            body.append("            extractIds(po, context);\n");
+            body.append("        }\n");
+            body.append("    }\n\n");
+
+            body.append("    public static void extractIds(").append(model.sourceSimpleName)
+                    .append(" po, TranslationContext context) {\n");
+            body.append("        if (po == null) {\n");
+            body.append("            return;\n");
+            body.append("        }\n");
             for (TranslateFieldModel tf : model.translateFields) {
-                body.append("            context.collectId(\"")
+                body.append("        context.collectId(\"")
                         .append(tf.type).append("\", po.").append(tf.sourceGetter).append("());\n");
             }
             for (NestedFieldModel nested : model.nestedFields) {
-                body.append("            if (po.get").append(capitalize(nested.fieldName))
-                        .append("() != null) {\n");
-                body.append("                for (").append(nested.sourceItemSimpleName)
-                        .append(" item : po.get").append(capitalize(nested.fieldName)).append("()) {\n");
-                body.append("                    if (item == null) {\n");
-                body.append("                        continue;\n");
-                body.append("                    }\n");
-                appendNestedCollect(body, nested.nestedTargetClassName, "item");
-                body.append("                }\n");
-                body.append("            }\n");
+                String poGetter = "po." + getter(nested.poFieldName) + "()";
+                String extractionCode = generateRecursiveExtract(nested.poFieldType, nested.voFieldType, poGetter, 1);
+                body.append(extractionCode);
             }
-            body.append("        }\n");
             body.append("    }\n\n");
 
             body.append("    @Override\n");
             body.append("    public List<").append(model.targetSimpleName).append("> toTargetList(List<")
                     .append(model.sourceSimpleName).append("> pos, TranslationContext context) {\n");
-            body.append("        if (pos == null) {\n");
-            body.append("            return null;\n");
-            body.append("        }\n");
-            body.append("        List<").append(model.targetSimpleName).append("> list = new ArrayList<>(pos.size());\n");
-            body.append("        for (").append(model.sourceSimpleName).append(" po : pos) {\n");
-            body.append("            list.add(delegate.toVO(po, context));\n");
-            body.append("        }\n");
-            body.append("        return list;\n");
+            body.append("        return delegate.toVOList(pos, context);\n");
             body.append("    }\n");
             body.append("}\n");
 
             writeJava(model.mapperPackageName + "." + model.bridgeSimpleName, body.toString());
         } catch (IOException e) {
             throw new IllegalStateException("生成 MapperBridge 失败: " + model.bridgeSimpleName, e);
-        }
-    }
-
-    private void appendNestedCollect(StringBuilder body, String nestedTargetClassName, String varName) {
-        TypeElement targetElement = elements.getTypeElement(nestedTargetClassName);
-        for (VariableElement field : ElementFilter.fieldsIn(targetElement.getEnclosedElements())) {
-            TranslateField translate = field.getAnnotation(TranslateField.class);
-            if (translate != null) {
-                body.append("                    context.collectId(\"")
-                        .append(translate.type()).append("\", ")
-                        .append(varName).append(".").append(getter(translate.source())).append("());\n");
-            }
-        }
-        Map<String, VariableElement> sourceFields = fieldMap(elements.getTypeElement(
-                resolveSourceClassNames(targetElement).get(0)));
-        for (VariableElement field : ElementFilter.fieldsIn(targetElement.getEnclosedElements())) {
-            NestedFieldModel deeper = analyzeNestedField(field, sourceFields);
-            if (deeper != null) {
-                body.append("                    if (").append(varName).append(".get")
-                        .append(capitalize(deeper.fieldName)).append("() != null) {\n");
-                body.append("                        for (").append(deeper.sourceItemSimpleName)
-                        .append(" sub : ").append(varName).append(".get")
-                        .append(capitalize(deeper.fieldName)).append("()) {\n");
-                appendNestedCollect(body, deeper.nestedTargetClassName, "sub");
-                body.append("                        }\n");
-                body.append("                    }\n");
-            }
         }
     }
 
@@ -507,6 +488,242 @@ public class EasyTransProcessor extends AbstractProcessor {
         return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
+    private boolean isTranslatable(TypeMirror type) {
+        if (type.getKind() != TypeKind.DECLARED) {
+            return false;
+        }
+        DeclaredType declared = (DeclaredType) type;
+        TypeElement element = (TypeElement) declared.asElement();
+        if (element.getAnnotation(TranslateFrom.class) != null) {
+            return true;
+        }
+        if (isCollection(type)) {
+            if (!declared.getTypeArguments().isEmpty()) {
+                return isTranslatable(declared.getTypeArguments().get(0));
+            }
+        }
+        if (isMap(type)) {
+            for (TypeMirror arg : declared.getTypeArguments()) {
+                if (isTranslatable(arg)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isCollection(TypeMirror type) {
+        if (collectionTypeMirror == null) return false;
+        return processingEnv.getTypeUtils().isSubtype(
+                processingEnv.getTypeUtils().erasure(type),
+                collectionTypeMirror
+        );
+    }
+
+    private boolean isMap(TypeMirror type) {
+        if (mapTypeMirror == null) return false;
+        return processingEnv.getTypeUtils().isSubtype(
+                processingEnv.getTypeUtils().erasure(type),
+                mapTypeMirror
+        );
+    }
+
+    private boolean isComplexNested(TypeMirror type) {
+        if (type.getKind() != TypeKind.DECLARED) {
+            return false;
+        }
+        DeclaredType declared = (DeclaredType) type;
+        TypeElement element = (TypeElement) declared.asElement();
+        if (element.getAnnotation(TranslateFrom.class) != null) {
+            return false;
+        }
+        if (isCollection(type)) {
+            TypeMirror itemType = declared.getTypeArguments().get(0);
+            if (itemType.getKind() == TypeKind.DECLARED) {
+                DeclaredType declaredItem = (DeclaredType) itemType;
+                if (declaredItem.asElement().getAnnotation(TranslateFrom.class) != null) {
+                    return false;
+                }
+            }
+            return isTranslatable(itemType);
+        }
+        if (isMap(type)) {
+            TypeMirror valueType = declared.getTypeArguments().get(1);
+            if (valueType.getKind() == TypeKind.DECLARED) {
+                DeclaredType declaredVal = (DeclaredType) valueType;
+                if (declaredVal.asElement().getAnnotation(TranslateFrom.class) != null) {
+                    return false;
+                }
+            }
+            return isTranslatable(valueType);
+        }
+        return false;
+    }
+
+    private void collectNestedTranslatables(TypeMirror type, Set<TypeElement> result) {
+        if (type.getKind() != TypeKind.DECLARED) {
+            return;
+        }
+        DeclaredType declared = (DeclaredType) type;
+        TypeElement element = (TypeElement) declared.asElement();
+        if (element.getAnnotation(TranslateFrom.class) != null) {
+            result.add(element);
+            return;
+        }
+        for (TypeMirror arg : declared.getTypeArguments()) {
+            collectNestedTranslatables(arg, result);
+        }
+    }
+
+    private int getNestingDepth(TypeMirror type) {
+        if (type.getKind() != TypeKind.DECLARED) {
+            return 0;
+        }
+        DeclaredType declared = (DeclaredType) type;
+        TypeElement element = (TypeElement) declared.asElement();
+        if (element.getAnnotation(TranslateFrom.class) != null) {
+            return 0;
+        }
+        if (isCollection(type)) {
+            if (!declared.getTypeArguments().isEmpty()) {
+                return 1 + getNestingDepth(declared.getTypeArguments().get(0));
+            }
+        }
+        if (isMap(type)) {
+            if (declared.getTypeArguments().size() >= 2) {
+                return 1 + Math.max(
+                        getNestingDepth(declared.getTypeArguments().get(0)),
+                        getNestingDepth(declared.getTypeArguments().get(1))
+                );
+            }
+        }
+        return 0;
+    }
+
+    private void collectIntermediateSignatures(TypeMirror voType, TypeMirror poType, Set<TypePair> signatures) {
+        if (voType.getKind() != TypeKind.DECLARED || poType.getKind() != TypeKind.DECLARED) {
+            return;
+        }
+        DeclaredType declaredVo = (DeclaredType) voType;
+        DeclaredType declaredPo = (DeclaredType) poType;
+        TypeElement elementVo = (TypeElement) declaredVo.asElement();
+
+        if (elementVo.getAnnotation(TranslateFrom.class) != null) {
+            return;
+        }
+
+        if (getNestingDepth(voType) > 1) {
+            signatures.add(new TypePair(voType, poType));
+        }
+
+        if (isCollection(voType)) {
+            if (!declaredVo.getTypeArguments().isEmpty() && !declaredPo.getTypeArguments().isEmpty()) {
+                TypeMirror voArg = declaredVo.getTypeArguments().get(0);
+                TypeMirror poArg = declaredPo.getTypeArguments().get(0);
+                if (isTranslatable(voArg)) {
+                    collectIntermediateSignatures(voArg, poArg, signatures);
+                }
+            }
+        } else if (isMap(voType)) {
+            if (declaredVo.getTypeArguments().size() >= 2 && declaredPo.getTypeArguments().size() >= 2) {
+                TypeMirror voKey = declaredVo.getTypeArguments().get(0);
+                TypeMirror poKey = declaredPo.getTypeArguments().get(0);
+                TypeMirror voVal = declaredVo.getTypeArguments().get(1);
+                TypeMirror poVal = declaredPo.getTypeArguments().get(1);
+                boolean transKey = isTranslatable(voKey);
+                boolean transVal = isTranslatable(voVal);
+                if (transKey) collectIntermediateSignatures(voKey, poKey, signatures);
+                if (transVal) collectIntermediateSignatures(voVal, poVal, signatures);
+            }
+        }
+    }
+
+    private String generateRecursiveExtract(TypeMirror poType, TypeMirror voType, String expr, int depth) {
+        if (voType.getKind() != TypeKind.DECLARED) {
+            return "";
+        }
+        DeclaredType declaredVo = (DeclaredType) voType;
+        DeclaredType declaredPo = (DeclaredType) poType;
+        TypeElement elementVo = (TypeElement) declaredVo.asElement();
+
+        if (elementVo.getAnnotation(TranslateFrom.class) != null) {
+            String bridgeClassName = getMapperPackageName(elementVo.getQualifiedName().toString()) + "." +
+                    simpleName(declaredPo.asElement().toString()) + "To" + elementVo.getSimpleName().toString() + "AutoMapperBridge";
+            return "        " + bridgeClassName + ".extractIds(" + expr + ", context);\n";
+        }
+
+        if (isCollection(voType)) {
+            String varName = "item" + depth;
+            String poItemType = declaredPo.getTypeArguments().get(0).toString();
+            StringBuilder sb = new StringBuilder();
+            sb.append("        if (").append(expr).append(" != null) {\n");
+            sb.append("            for (").append(poItemType).append(" ").append(varName).append(" : ").append(expr).append(
+                    ") {\n");
+            sb.append("                if (").append(varName).append(" != null) {\n");
+            sb.append(indent(generateRecursiveExtract(declaredPo.getTypeArguments().get(0),
+                                                      declaredVo.getTypeArguments().get(0),
+                                                      varName,
+                                                      depth + 1), "    "));
+            sb.append("                }\n");
+            sb.append("            }\n");
+            sb.append("        }\n");
+            return sb.toString();
+        }
+
+        if (isMap(voType)) {
+            String entryVar = "entry" + depth;
+            String keyTypePo = declaredPo.getTypeArguments().get(0).toString();
+            String valueTypePo = declaredPo.getTypeArguments().get(1).toString();
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("        if (").append(expr).append(" != null) {\n");
+            sb.append("            for (java.util.Map.Entry<").append(keyTypePo).append(", ").append(valueTypePo).append(
+                    "> ").append(entryVar).append(" : ").append(expr).append(".entrySet()) {\n");
+            sb.append("                if (").append(entryVar).append(" != null) {\n");
+
+            if (isTranslatable(declaredVo.getTypeArguments().get(0))) {
+                sb.append("                    if (").append(entryVar).append(".getKey() != null) {\n");
+                sb.append(indent(generateRecursiveExtract(declaredPo.getTypeArguments().get(0),
+                                                          declaredVo.getTypeArguments().get(0),
+                                                          entryVar + ".getKey()",
+                                                          depth + 1), "    "));
+                sb.append("                    }\n");
+            }
+
+            if (isTranslatable(declaredVo.getTypeArguments().get(1))) {
+                sb.append("                    if (").append(entryVar).append(".getValue() != null) {\n");
+                sb.append(indent(generateRecursiveExtract(declaredPo.getTypeArguments().get(1),
+                                                          declaredVo.getTypeArguments().get(1),
+                                                          entryVar + ".getValue()",
+                                                          depth + 1), "    "));
+                sb.append("                    }\n");
+            }
+
+            sb.append("                }\n");
+            sb.append("            }\n");
+            sb.append("        }\n");
+            return sb.toString();
+        }
+
+        return "";
+    }
+
+    private String indent(String code, String prefix) {
+        if (code == null || code.isEmpty()) {
+            return "";
+        }
+        String[] lines = code.split("\n");
+        StringBuilder sb = new StringBuilder();
+        for (String line : lines) {
+            if (!line.isEmpty()) {
+                sb.append(prefix).append(line).append("\n");
+            } else {
+                sb.append("\n");
+            }
+        }
+        return sb.toString();
+    }
+
     private static final class PairModel {
         String targetClassName;
         String sourceClassName;
@@ -528,10 +745,35 @@ public class EasyTransProcessor extends AbstractProcessor {
 
     private static final class NestedFieldModel {
         String fieldName;
-        String sourceItemClassName;
-        String sourceItemSimpleName;
-        String nestedTargetClassName;
-        String nestedMapperSimpleName;
-        String nestedMapperClassName;
+        String poFieldName;
+        TypeMirror voFieldType;
+        TypeMirror poFieldType;
+    }
+
+    private static final class TypePair {
+        TypeMirror voType;
+        TypeMirror poType;
+        String voStr;
+        String poStr;
+
+        public TypePair(TypeMirror voType, TypeMirror poType) {
+            this.voType = voType;
+            this.poType = poType;
+            this.voStr = voType.toString();
+            this.poStr = poType.toString();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof TypePair)) return false;
+            TypePair typePair = (TypePair) o;
+            return voStr.equals(typePair.voStr) && poStr.equals(typePair.poStr);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(voStr, poStr);
+        }
     }
 }

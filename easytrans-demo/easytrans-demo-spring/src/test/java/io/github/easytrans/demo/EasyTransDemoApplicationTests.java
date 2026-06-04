@@ -7,8 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -78,7 +77,30 @@ public class EasyTransDemoApplicationTests {
                 .andExpect(jsonPath("$.items[0].goodsId", is(101)))
                 .andExpect(jsonPath("$.items[0].goodsName", is("MacBook Pro")))
                 .andExpect(jsonPath("$.items[1].goodsId", is(102)))
-                .andExpect(jsonPath("$.items[1].goodsName", is("iPhone 15")));
+                .andExpect(jsonPath("$.items[1].goodsName", is("iPhone 15")))
+
+                // 1. Single Value (Nested Object)
+                .andExpect(jsonPath("$.singleItem.goodsId", is(101)))
+                .andExpect(jsonPath("$.singleItem.goodsName", is("MacBook Pro")))
+
+                // 2. Collection (Set)
+                .andExpect(jsonPath("$.itemSet", hasSize(2)))
+                // 使用 jsonPath features checking if MacBook Pro is in the names list
+                .andExpect(jsonPath("$.itemSet[*].goodsName", hasItems("MacBook Pro", "iPhone 15")))
+
+                // 3. Map
+                .andExpect(jsonPath("$.itemMap.itemKey.goodsId", is(101)))
+                .andExpect(jsonPath("$.itemMap.itemKey.goodsName", is("MacBook Pro")))
+
+                // 4. Map of Collection
+                .andExpect(jsonPath("$.nestedItemMap.outerKey", hasSize(2)))
+                .andExpect(jsonPath("$.nestedItemMap.outerKey[0].goodsName", is("MacBook Pro")))
+                .andExpect(jsonPath("$.nestedItemMap.outerKey[1].goodsName", is("iPhone 15")))
+
+                // 5. Deep Nested Map (Map of Map of List)
+                .andExpect(jsonPath("$.deepNestedItemMap.outerKey.innerKey", hasSize(2)))
+                .andExpect(jsonPath("$.deepNestedItemMap.outerKey.innerKey[0].goodsName", is("MacBook Pro")))
+                .andExpect(jsonPath("$.deepNestedItemMap.outerKey.innerKey[1].goodsName", is("iPhone 15")));
     }
 
     /**
