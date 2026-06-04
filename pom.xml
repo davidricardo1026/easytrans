@@ -23,7 +23,7 @@
         <module>easytrans-core</module>
         <module>easytrans-processor</module>
         <module>easytrans-spring-boot-starter</module>
-        <module>easytrans-spring-boot-starter-v2</module>
+        <module>easytrans-spring-boot2-starter</module>
         <module>easytrans-demo</module>
     </modules>
 

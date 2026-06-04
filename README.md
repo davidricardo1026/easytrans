@@ -116,15 +116,31 @@ EasyTrans 默认会往生成的 Mapper、Bridge 和 Registry 类上加上 `@Comp
 
 #### B. Spring Boot 2 (JDK 8 / 11 / 17)
 
-直接在你的主应用中引入 `easytrans-spring-boot-starter-v2`：
+直接在你的主应用中引入 `easytrans-spring-boot2-starter`：
 
 ```xml
 <dependency>
     <groupId>io.github.easytrans</groupId>
-    <artifactId>easytrans-spring-boot-starter-v2</artifactId>
+    <artifactId>easytrans-spring-boot2-starter</artifactId>
     <version>1.0.0-SNAPSHOT</version>
 </dependency>
 ```
+
+#### 🔌 双版本 Starter 精准适配与命名规范
+
+为顺应不同企业级项目的技术选型，EasyTrans 针对 Spring Boot 2.x 和 3.x/4.x 提供极其规范且精细的 Starter 支持：
+
+| 适配版本                           | Starter 坐标                       | 底层自动装配规范                                                                           | 最低 JDK     |
+|:-------------------------------|:---------------------------------|:-----------------------------------------------------------------------------------|:-----------|
+| **Spring Boot 3.x & 4.x** (主线) | `easytrans-spring-boot-starter`  | `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` | JDK 17     |
+| **Spring Boot 2.x** (历史兼容)     | `easytrans-spring-boot2-starter` | `META-INF/spring.factories`                                                        | JDK 8 / 11 |
+
+> **💡 设计细节（如何抵御循环依赖）**
+>
+> 在多模块或大型项目中，翻译注册表（`TranslationRegistry`）可能与各类持久层 Service/Mapper 形成复杂的拓扑结构。
+> EasyTrans 无论在 2.x 还是 3.x Starter 中，均采用 `ObjectProvider<TranslationRegistry>` 与 Lazy `Supplier` 组合拳，使得核心
+`CompositeTranslationRegistry` 可以延迟加载各个子模块生成的子注册表，**完美规避并消灭了 Spring
+初始化阶段可能引发的 `BeanCurrentlyInCreationException`（循环依赖）问题**。
 
 #### APT 编译器配置：
 
@@ -183,7 +199,7 @@ dependencies {
   // Spring Boot 3/4 选择:
   implementation 'io.github.easytrans:easytrans-spring-boot-starter:1.0.0-SNAPSHOT'
   // Spring Boot 2 选择:
-  // implementation 'io.github.easytrans:easytrans-spring-boot-starter-v2:1.0.0-SNAPSHOT'
+  // implementation 'io.github.easytrans:easytrans-spring-boot2-starter:1.0.0-SNAPSHOT'
 
   implementation 'org.mapstruct:mapstruct:1.5.5.Final'
   compileOnly 'org.projectlombok:lombok:1.18.30'

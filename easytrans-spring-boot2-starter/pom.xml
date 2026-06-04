@@ -10,8 +10,8 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>easytrans-spring-boot-starter-v2</artifactId>
-    <name>easytrans-spring-boot-starter-v2</name>
+    <artifactId>easytrans-spring-boot2-starter</artifactId>
+    <name>easytrans-spring-boot2-starter</name>
     <description>EasyTrans Starter for Spring Boot 2</description>
 
     <dependencies>
