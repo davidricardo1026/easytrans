@@ -17,7 +17,27 @@
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
     </properties>
+
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.9.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <skipPublishing>true</skipPublishing>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <modules>
         <module>easytrans-demo-spring</module>
