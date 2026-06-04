@@ -38,9 +38,9 @@
     </developers>
 
     <scm>
-        <connection>scm:git:git://github.com/davidricardo1026/easytrans.git</connection>
-        <developerConnection>scm:git:ssh://github.com:davidricardo1026/easytrans.git</developerConnection>
-        <url>https://github.com/davidricardo1026/easytrans/tree/master</url>
+        <connection>scm:git:https://github.com/davidricardo1026/easytrans.git</connection>
+        <developerConnection>scm:git:git@github.com:davidricardo1026/easytrans.git</developerConnection>
+        <url>https://github.com/davidricardo1026/easytrans</url>
     </scm>
 
     <modules>

@@ -13,6 +13,30 @@
     <artifactId>easytrans-spring-boot2-starter</artifactId>
     <name>easytrans-spring-boot2-starter</name>
     <description>EasyTrans Starter for Spring Boot 2</description>
+    <url>https://github.com/davidricardo1026/easytrans</url>
+
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>davidricardo1026</name>
+            <email>davidricardo1026@gmail.com</email>
+            <organization>io.github.davidricardo1026</organization>
+            <organizationUrl>https://github.com/davidricardo1026</organizationUrl>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/davidricardo1026/easytrans.git</connection>
+        <developerConnection>scm:git:git@github.com:davidricardo1026/easytrans.git</developerConnection>
+        <url>https://github.com/davidricardo1026/easytrans</url>
+    </scm>
 
     <dependencies>
         <dependency>
