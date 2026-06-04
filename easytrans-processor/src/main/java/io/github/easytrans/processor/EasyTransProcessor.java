@@ -346,7 +346,11 @@ public class EasyTransProcessor extends AbstractProcessor {
             }
             for (NestedFieldModel nested : model.nestedFields) {
                 String poGetter = "po." + getter(nested.poFieldName) + "()";
-                String extractionCode = generateRecursiveExtract(nested.poFieldType, nested.voFieldType, poGetter, 1);
+                String extractionCode = generateRecursiveExtract(nested.poFieldType,
+                                                                 nested.voFieldType,
+                                                                 poGetter,
+                                                                 1,
+                                                                 "        ");
                 body.append(extractionCode);
             }
             body.append("    }\n\n");
@@ -638,7 +642,11 @@ public class EasyTransProcessor extends AbstractProcessor {
         }
     }
 
-    private String generateRecursiveExtract(TypeMirror poType, TypeMirror voType, String expr, int depth) {
+    private String generateRecursiveExtract(TypeMirror poType,
+                                            TypeMirror voType,
+                                            String expr,
+                                            int depth,
+                                            String indent) {
         if (voType.getKind() != TypeKind.DECLARED) {
             return "";
         }
@@ -649,24 +657,25 @@ public class EasyTransProcessor extends AbstractProcessor {
         if (elementVo.getAnnotation(TranslateFrom.class) != null) {
             String bridgeClassName = getMapperPackageName(elementVo.getQualifiedName().toString()) + "." +
                     simpleName(declaredPo.asElement().toString()) + "To" + elementVo.getSimpleName().toString() + "AutoMapperBridge";
-            return "        " + bridgeClassName + ".extractIds(" + expr + ", context);\n";
+            return indent + "if (" + expr + " != null) {\n" +
+                    indent + "    " + bridgeClassName + ".extractIds(" + expr + ", context);\n" +
+                    indent + "}\n";
         }
 
         if (isCollection(voType)) {
             String varName = "item" + depth;
             String poItemType = declaredPo.getTypeArguments().get(0).toString();
             StringBuilder sb = new StringBuilder();
-            sb.append("        if (").append(expr).append(" != null) {\n");
-            sb.append("            for (").append(poItemType).append(" ").append(varName).append(" : ").append(expr).append(
-                    ") {\n");
-            sb.append("                if (").append(varName).append(" != null) {\n");
-            sb.append(indent(generateRecursiveExtract(declaredPo.getTypeArguments().get(0),
+            sb.append(indent).append("if (").append(expr).append(" != null) {\n");
+            sb.append(indent).append("    for (").append(poItemType).append(" ").append(varName).append(" : ").append(
+                    expr).append(") {\n");
+            sb.append(generateRecursiveExtract(declaredPo.getTypeArguments().get(0),
                                                       declaredVo.getTypeArguments().get(0),
                                                       varName,
-                                                      depth + 1), "    "));
-            sb.append("                }\n");
-            sb.append("            }\n");
-            sb.append("        }\n");
+                                               depth + 1,
+                                               indent + "        "));
+            sb.append(indent).append("    }\n");
+            sb.append(indent).append("}\n");
             return sb.toString();
         }
 
@@ -676,32 +685,30 @@ public class EasyTransProcessor extends AbstractProcessor {
             String valueTypePo = declaredPo.getTypeArguments().get(1).toString();
 
             StringBuilder sb = new StringBuilder();
-            sb.append("        if (").append(expr).append(" != null) {\n");
-            sb.append("            for (java.util.Map.Entry<").append(keyTypePo).append(", ").append(valueTypePo).append(
+            sb.append(indent).append("if (").append(expr).append(" != null) {\n");
+            sb.append(indent).append("    for (java.util.Map.Entry<").append(keyTypePo).append(", ").append(valueTypePo).append(
                     "> ").append(entryVar).append(" : ").append(expr).append(".entrySet()) {\n");
-            sb.append("                if (").append(entryVar).append(" != null) {\n");
+            sb.append(indent).append("        if (").append(entryVar).append(" != null) {\n");
 
             if (isTranslatable(declaredVo.getTypeArguments().get(0))) {
-                sb.append("                    if (").append(entryVar).append(".getKey() != null) {\n");
-                sb.append(indent(generateRecursiveExtract(declaredPo.getTypeArguments().get(0),
+                sb.append(generateRecursiveExtract(declaredPo.getTypeArguments().get(0),
                                                           declaredVo.getTypeArguments().get(0),
                                                           entryVar + ".getKey()",
-                                                          depth + 1), "    "));
-                sb.append("                    }\n");
+                                                   depth + 1,
+                                                   indent + "            "));
             }
 
             if (isTranslatable(declaredVo.getTypeArguments().get(1))) {
-                sb.append("                    if (").append(entryVar).append(".getValue() != null) {\n");
-                sb.append(indent(generateRecursiveExtract(declaredPo.getTypeArguments().get(1),
+                sb.append(generateRecursiveExtract(declaredPo.getTypeArguments().get(1),
                                                           declaredVo.getTypeArguments().get(1),
                                                           entryVar + ".getValue()",
-                                                          depth + 1), "    "));
-                sb.append("                    }\n");
+                                                   depth + 1,
+                                                   indent + "            "));
             }
 
-            sb.append("                }\n");
-            sb.append("            }\n");
-            sb.append("        }\n");
+            sb.append(indent).append("        }\n");
+            sb.append(indent).append("    }\n");
+            sb.append(indent).append("}\n");
             return sb.toString();
         }
 
