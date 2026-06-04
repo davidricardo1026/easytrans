@@ -123,11 +123,79 @@ public class UserTranslationFeeder implements TranslationFeeder {
 
 ---
 
+### 4. 配置 Annotation Processor：Maven / Gradle
+
+EasyTrans 在编译期通过 APT 自动生成转义代码，因此需要将 `easytrans-processor` 配置为 **annotation processor**。推荐与
+Lombok、MapStruct processor 一同配置，确保处理顺序正确：
+
+**Maven 配置：**
+
+```xml
+
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>3.11.0</version>
+            <configuration>
+                <source>17</source>
+                <target>17</target>
+                <annotationProcessorPaths>
+                    <path>
+                        <groupId>org.projectlombok</groupId>
+                        <artifactId>lombok</artifactId>
+                        <version>${lombok.version}</version>
+                    </path>
+                    <path>
+                        <groupId>io.github.davidricardo1026</groupId>
+                        <artifactId>easytrans-processor</artifactId>
+                        <version>${easytrans.version}</version>
+                    </path>
+                    <path>
+                        <groupId>org.mapstruct</groupId>
+                        <artifactId>mapstruct-processor</artifactId>
+                        <version>${mapstruct.version}</version>
+                    </path>
+                    <path>
+                        <groupId>org.projectlombok</groupId>
+                        <artifactId>lombok-mapstruct-binding</artifactId>
+                        <version>0.2.0</version>
+                    </path>
+                </annotationProcessorPaths>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+```
+
+<details>
+<summary><b>Gradle 配置（点击展开）</b></summary>
+
+```groovy
+dependencies {
+    implementation 'io.github.davidricardo1026:easytrans-core:1.0.0'
+
+    annotationProcessor 'org.projectlombok:lombok:${lombokVersion}'
+    annotationProcessor 'io.github.davidricardo1026:easytrans-processor:1.0.0'
+    annotationProcessor 'org.mapstruct:mapstruct-processor:${mapstructVersion}'
+    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+}
+```
+
+</details>
+
+> **💡 提示**：Lombok 必须在 MapStruct processor 和 EasyTrans processor **之前**声明，因为 MapStruct 的生成代码依赖 Lombok
+> 生成的 getter/setter/build 方法，而 EasyTrans 则依赖 MapStruct 生成的 Mapper 接口。
+
+---
+
 ## 🔌 强大的双版本 Starter 精准适配
 
 为了照顾不同企业技术选型的兼容性，EasyTrans 提供了极其规范的双版本自动装配 Starter：
 
 * **Spring Boot 3.x & 4.x (JDK 17+)**：
+    - Maven：
   ```xml
   <dependency>
       <groupId>io.github.davidricardo1026</groupId>
@@ -135,13 +203,22 @@ public class UserTranslationFeeder implements TranslationFeeder {
       <version>1.0.0</version>
   </dependency>
   ```
+    - Gradle：
+  ```groovy
+  implementation 'io.github.davidricardo1026:easytrans-spring-boot-starter:1.0.0'
+  ```
 * **Spring Boot 2.x (JDK 17+ / 仅作 Spring Boot 2 兼容适配)**：
+    - Maven：
   ```xml
   <dependency>
       <groupId>io.github.davidricardo1026</groupId>
       <artifactId>easytrans-spring-boot2-starter</artifactId>
       <version>1.0.0</version>
   </dependency>
+  ```
+    - Gradle：
+  ```groovy
+  implementation 'io.github.davidricardo1026:easytrans-spring-boot2-starter:1.0.0'
   ```
 
 > **🛡️ 设计细节**：在复杂的企业级多模块依赖拓扑中，翻译注册表极易与持久层 Service/Mapper 形成令人崩溃的**循环引用**
