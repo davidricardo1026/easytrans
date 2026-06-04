@@ -22,7 +22,7 @@
 EasyTrans 在**编译期**通过 APT 自动生成原生、高吞吐的桥接类（Bridge）。所有的 ID 收集、嵌套递归和属性回填代码在运行期等同于你一行行手写的纯
 Java 代码（纯 for 循环和 setter 调用），物理性能达到绝对极限，彻底释放你的 CPU 资源。
 
-项目已开源，Maven 中央仓库正式版 `1.0.0` 现已同步上架！
+项目已开源，Maven 中央仓库正式版 `2.0.0` 现已同步上架！
 
 * **GitHub 仓库**：[davidricardo1026/easytrans](https://github.com/davidricardo1026/easytrans)
 
@@ -122,6 +122,83 @@ public class UserTranslationFeeder implements TranslationFeeder {
     }
 }
 ```
+
+### 4. 依赖引入与编译期配置
+
+> **💡 开箱即用，配置全可选：**  
+> 默认不加任何编译器配置时，EasyTrans 会自动将 Bridge 类与 Registry 注册表类安全隔离生成于 `.generated` 和
+`.generated.registry` 隔离子包下。常规项目直接引入 Starter 依赖即可，无须配置任何编译器参数！
+
+#### A. Maven 配置示例
+
+直接引入 Starter 依赖：
+
+```xml
+<!-- Spring Boot 3.x & 4.x (JDK 17+) 选择： -->
+<dependency>
+    <groupId>io.github.davidricardo1026</groupId>
+    <artifactId>easytrans-spring-boot-starter</artifactId>
+    <version>2.0.0</version>
+</dependency>
+
+        <!-- Spring Boot 2.x (JDK 17+) 选择： -->
+        <!--
+        <dependency>
+            <groupId>io.github.davidricardo1026</groupId>
+            <artifactId>easytrans-spring-boot2-starter</artifactId>
+            <version>2.0.0</version>
+        </dependency>
+        -->
+```
+
+在 `maven-compiler-plugin` 中配置编译期注解处理器：
+
+```xml
+
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-compiler-plugin</artifactId>
+    <version>3.11.0</version>
+    <configuration>
+        <source>17</source>
+        <target>17</target>
+        <annotationProcessorPaths>
+            <path>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok</artifactId>
+                <version>${lombok.version}</version>
+            </path>
+            <path>
+                <groupId>io.github.davidricardo1026</groupId>
+                <artifactId>easytrans-processor</artifactId>
+                <version>2.0.0</version>
+            </path>
+        </annotationProcessorPaths>
+    </configuration>
+</plugin>
+```
+
+#### B. Gradle 配置示例 (折叠展示)
+
+<details>
+<summary><b>点击展开 / 折叠 Gradle 配置 (Groovy DSL)</b></summary>
+
+```groovy
+dependencies {
+    // Spring Boot 3/4 选择:
+    implementation 'io.github.davidricardo1026:easytrans-spring-boot-starter:2.0.0'
+    // Spring Boot 2 选择:
+    // implementation 'io.github.davidricardo1026:easytrans-spring-boot2-starter:2.0.0'
+
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+
+    // 声明注解处理器 (APT)
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'io.github.davidricardo1026:easytrans-processor:2.0.0'
+}
+```
+
+</details>
 
 ---
 

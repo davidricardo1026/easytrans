@@ -13,7 +13,7 @@
 
     <groupId>io.github.davidricardo1026</groupId>
     <artifactId>easytrans-parent</artifactId>
-    <version>1.0.0</version>
+    <version>2.0.0</version>
     <packaging>pom</packaging>
     <name>easytrans-parent</name>
     <description>EasyTrans: High-performance, zero-intrusion auto-translation tool based on MapStruct and APT

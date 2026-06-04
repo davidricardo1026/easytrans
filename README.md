@@ -117,7 +117,7 @@ EasyTrans 默认会往生成的 Bridge 和 Registry 类上加上 `@Component`，
 <dependency>
     <groupId>io.github.davidricardo1026</groupId>
     <artifactId>easytrans-spring-boot-starter</artifactId>
-    <version>1.0.0</version>
+    <version>2.0.0</version>
 </dependency>
 ```
 
@@ -129,7 +129,7 @@ EasyTrans 默认会往生成的 Bridge 和 Registry 类上加上 `@Component`，
 <dependency>
     <groupId>io.github.davidricardo1026</groupId>
     <artifactId>easytrans-spring-boot2-starter</artifactId>
-    <version>1.0.0</version>
+    <version>2.0.0</version>
 </dependency>
 ```
 
@@ -165,7 +165,7 @@ Spring 架构等高级定制需求时才需要配置，常规项目直接引入�
             <path>
                 <groupId>io.github.davidricardo1026</groupId>
                 <artifactId>easytrans-processor</artifactId>
-                <version>1.0.0</version>
+                <version>2.0.0</version>
             </path>
         </annotationProcessorPaths>
     </configuration>
@@ -181,15 +181,15 @@ MapStruct，所以依赖声明极其轻量精简！**
 dependencies {
   // 1. 引入 EasyTrans Starter (根据你的 Spring Boot 版本选择)
   // Spring Boot 3/4 选择:
-  implementation 'io.github.davidricardo1026:easytrans-spring-boot-starter:1.0.0'
+  implementation 'io.github.davidricardo1026:easytrans-spring-boot-starter:2.0.0'
   // Spring Boot 2 选择:
-  // implementation 'io.github.davidricardo1026:easytrans-spring-boot2-starter:1.0.0'
+  // implementation 'io.github.davidricardo1026:easytrans-spring-boot2-starter:2.0.0'
 
   compileOnly 'org.projectlombok:lombok:1.18.30'
 
   // 2. 声明注解处理器 (APT)
   annotationProcessor 'org.projectlombok:lombok:1.18.30'
-  annotationProcessor 'io.github.davidricardo1026:easytrans-processor:1.0.0'
+  annotationProcessor 'io.github.davidricardo1026:easytrans-processor:2.0.0'
 }
 
 // 3. 传入编译配置参数（可选：仅在有特殊自定义包名或非 Spring 环境等高级定制需求时配置，常规项目直接注释或省略此 block 即可）

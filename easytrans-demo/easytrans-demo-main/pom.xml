@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.github.davidricardo1026</groupId>
         <artifactId>easytrans-demo</artifactId>
-        <version>1.0.0</version>
+        <version>2.0.0</version>
     </parent>
 
     <artifactId>easytrans-demo-main</artifactId>
